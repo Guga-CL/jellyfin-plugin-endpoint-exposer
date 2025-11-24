@@ -21,8 +21,8 @@ Thumbs.db
 .nuget/
 
 # Script
-*.ps1
-*.psm1
+# *.ps1
+# *.psm1
 
 #Others
 .idea/
@@ -32,4 +32,3 @@ Release
 node_modules
 Jellyfin.Plugin.EndpointExposer.sln
 My.Custom.Section.Plugin.bak/
-scripts/build-it/version.txt
