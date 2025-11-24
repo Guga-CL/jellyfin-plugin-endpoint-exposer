@@ -1,116 +1,50 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
-using System.Reflection;
-using MediaBrowser.Common.Plugins;
-using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Common.Plugins;
 
 namespace Jellyfin.Plugin.EndpointExposer
 {
-    public class Plugin : BasePlugin, IServerEntryPoint
+    public class Plugin : BasePlugin
     {
-        private readonly ILogger<Plugin> _logger;
-        private readonly IApplicationPaths? _appPaths;
-        private readonly IServerConfigurationManager? _configManager;
+        // Required override from BasePlugin
+        public override string Name => "Endpoint Exposer";
 
-        public Plugin(IApplicationPaths? appPaths = null, ILoggerFactory? loggerFactory = null, IServerConfigurationManager? configManager = null)
+        // Keep constructor trivial and non-throwing
+        public Plugin()
             : base()
         {
-            // Subscribe early to capture first-chance exceptions
+            // Minimal logging via NullLogger to avoid depending on ILoggerFactory at compile time
+            var logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<Plugin>();
             try
             {
-                AppDomain.CurrentDomain.FirstChanceException += CurrentDomain_FirstChanceException;
+                logger.LogInformation("[EndpointExposer] Plugin constructed (minimal).");
             }
-            catch { /* swallow */ }
-
-            try
+            catch
             {
-                _appPaths = appPaths;
-                _configManager = configManager;
-                _logger = loggerFactory?.CreateLogger<Plugin>() ?? new Microsoft.Extensions.Logging.Abstractions.NullLogger<Plugin>();
-
-                _logger.LogInformation("[EndpointExposer] Plugin constructor running...");
-                // Keep constructor minimal. Defer heavy work to OnApplicationStarted.
-            }
-            catch (Exception ex)
-            {
-                DumpExceptionToFile("plugin-constructor-exception", ex);
-                try { Console.Error.WriteLine($"[EndpointExposer] Constructor exception dumped to plugin folder: {ex.Message}"); } catch { }
-                try { _logger?.LogError(ex, "[EndpointExposer] Exception in plugin constructor (caught and dumped)."); } catch { }
-                // Do not rethrow
+                // Swallow any logging errors; constructor must not throw
             }
         }
 
-        private void CurrentDomain_FirstChanceException(object? sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
+        // Optional helper you can call from a controller or later when server services are available.
+        // This method intentionally avoids compile-time references to server interfaces.
+        public void InitializeIfNeeded()
         {
             try
             {
-                // Dump first-chance exceptions to a file for later inspection
-                DumpExceptionToFile("firstchance", e.Exception);
-            }
-            catch { /* swallow */ }
-        }
-
-        private void DumpExceptionToFile(string prefix, Exception ex)
-        {
-            try
-            {
+                // Example: write a marker file in plugin folder to indicate initialization ran.
                 var pluginDir = Path.Combine(
                     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) ?? ".",
                     "jellyfin", "plugins", "Jellyfin.Plugin.EndpointExposer");
 
                 Directory.CreateDirectory(pluginDir);
-
-                var file = Path.Combine(pluginDir, $"{prefix}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.log");
-
-                using var sw = new StreamWriter(file, append: false);
-                sw.WriteLine($"Timestamp: {DateTime.UtcNow:O}");
-                sw.WriteLine("Exception:");
-                sw.WriteLine(ex.ToString());
-                sw.WriteLine();
-                sw.WriteLine("Environment.StackTrace:");
-                sw.WriteLine(Environment.StackTrace);
-                sw.WriteLine();
-                sw.WriteLine("Loaded assemblies:");
-                foreach (var a in AppDomain.CurrentDomain.GetAssemblies().OrderBy(a => a.GetName().Name))
-                {
-                    try
-                    {
-                        var name = a.GetName();
-                        sw.WriteLine($"{name.Name}, Version={name.Version}, Location={a.Location}");
-                    }
-                    catch
-                    {
-                        sw.WriteLine($"<assembly info unavailable> {a.FullName}");
-                    }
-                }
-
-                sw.Flush();
+                var marker = Path.Combine(pluginDir, "initialized.txt");
+                File.WriteAllText(marker, $"Initialized at {DateTime.UtcNow:O}");
             }
             catch
             {
-                // must not throw from here
+                // Do not throw; keep initialization best-effort
             }
-        }
-
-        public void OnApplicationStarted()
-        {
-            try
-            {
-                _logger.LogInformation("[EndpointExposer] OnApplicationStarted called. Initializing plugin...");
-                // safe initialization here
-            }
-            catch (Exception ex)
-            {
-                DumpExceptionToFile("onstarted-exception", ex);
-                _logger?.LogError(ex, "[EndpointExposer] Initialization failed in OnApplicationStarted.");
-            }
-        }
-
-        public void OnApplicationStopping()
-        {
-            _logger?.LogInformation("[EndpointExposer] OnApplicationStopping called.");
         }
     }
 }

@@ -5,6 +5,9 @@ param(
 
 stop-Process -Name "jellyfin" -Verbose -ErrorAction SilentlyContinue
 
+
+$desktop_folder = [Environment]::GetFolderPath("Desktop")
+$local_appdata_folder = $env:LOCALAPPDATA
 $proj = ".\src\Jellyfin.Plugin.EndpointExposer\Jellyfin.Plugin.EndpointExposer.csproj"
 $buildDir = Join-Path -Path (Split-Path $proj -Parent) -ChildPath "bin\$Configuration\net9.0"
 
@@ -31,6 +34,9 @@ if (Test-Path ".\meta.json") {
   Copy-Item -Path ".\meta.json" -Destination $targetDir -Force
 }
 
+Write-Host "removing all logs before starting the jellyfin process"
+Get-ChildItem "$env:LOCALAPPDATA\jellyfin\log\" | remove-item
+
 Write-Host "Files copied. Restarting Jellyfin service..."
 # Restart service (adjust service name if different)
 Try {
@@ -40,3 +46,10 @@ Try {
 } Catch {
     Write-Warning "Could not start Jellyfin service automatically. Please start Jellyfin manually."
 }
+
+
+Start-Sleep 15
+
+$jellyfin_last_log = Get-item "$env:LOCALAPPDATA\jellyfin\log\log_*.log" | Select-Object -First 1
+
+Set-Content -Path "$desktop_folder\jellyfin_last_log.txt" -Value (get-content $jellyfin_last_log -raw)
