@@ -32,3 +32,4 @@ Release
 node_modules
 Jellyfin.Plugin.EndpointExposer.sln
 My.Custom.Section.Plugin.bak/
+*.sln
