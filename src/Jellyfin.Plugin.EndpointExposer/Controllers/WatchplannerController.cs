@@ -1,16 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Dynamic;
 using System.IO;
-using System.Linq;
-using System.Net;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using MediaBrowser.Controller.Users;
-using MediaBrowser.Model.Serialization;
+using MediaBrowser.Controller;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using Jellyfin.Server;
+using Newtonsoft.Json;
 
 namespace Jellyfin.Plugin.EndpointExposer.Controllers
 {
@@ -19,32 +15,31 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
     public class WatchplannerController : ControllerBase
     {
         private readonly ILogger<WatchplannerController> _logger;
-        private readonly IUserManager _userManager;
-        private readonly IJsonSerializer _json;
-        private readonly IServerApplicationPaths _paths;
+        private readonly IServerApplicationPaths? _paths;
         private static readonly object _fileLock = new object();
 
         public WatchplannerController(
             ILogger<WatchplannerController> logger,
-            IUserManager userManager,
-            IJsonSerializer json,
-            IServerApplicationPaths paths)
+            IServerApplicationPaths? paths = null)
         {
             _logger = logger;
-            _userManager = userManager;
-            _json = json;
             _paths = paths;
 
-            _logger.LogInformation("[EndpointExposer] WatchplannerController constructed.");
-            _logger.LogInformation("[EndpointExposer] ApplicationDataPath: {Path}", _paths.ApplicationDataPath);
+            _logger.LogInformation("[EndpointExposer] WatchplannerController constructed. IServerApplicationPaths available: {HasPaths}", _paths != null);
+            _logger.LogInformation("[EndpointExposer] Resolved ApplicationDataPath: {Path}", ResolveApplicationDataPath());
         }
 
-        // GET /Watchplanner/config
         [HttpGet("config")]
         public IActionResult GetConfig()
         {
             try
             {
+                if (!User?.Identity?.IsAuthenticated ?? true)
+                {
+                    _logger.LogWarning("[EndpointExposer] Unauthenticated GET attempt");
+                    return Unauthorized(new { success = false, message = "Not authenticated" });
+                }
+
                 var cfgPath = ConfigFilePath;
                 EnsureDirectoryExists(Path.GetDirectoryName(cfgPath));
 
@@ -55,7 +50,7 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
                         ["serverWeekGrid"] = new Dictionary<string, object>()
                     };
 
-                    var defaultJson = _json.SerializeToString(defaultObj);
+                    var defaultJson = JsonConvert.SerializeObject(defaultObj, Formatting.None);
                     _logger.LogInformation("[EndpointExposer] Config file not found, returning default config.");
                     return Content(defaultJson, "application/json");
                 }
@@ -70,73 +65,80 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
             }
         }
 
-        // POST /Watchplanner/config
         [HttpPost("config")]
         public async Task<IActionResult> PostConfig()
         {
             string remoteIp = HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
             try
             {
-                // Authenticate user
-                var userIdClaim = User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                if (string.IsNullOrEmpty(userIdClaim))
+                if (!User?.Identity?.IsAuthenticated ?? true)
                 {
                     _logger.LogWarning("[EndpointExposer] Unauthorized POST attempt (no user) from {IP}", remoteIp);
                     return Unauthorized(new { success = false, message = "Not authenticated" });
                 }
 
-                var user = _userManager.GetUserById(userIdClaim);
-                if (user == null || !user.IsAdministrator)
+                bool isAdmin = false;
+                try
                 {
-                    _logger.LogWarning("[EndpointExposer] Forbidden POST attempt by user {UserId} from {IP}", userIdClaim, remoteIp);
+                    isAdmin = User.IsInRole("Administrator");
+                }
+                catch { }
+
+                if (!isAdmin)
+                {
+                    var adminClaim = User.FindFirst("IsAdministrator") ?? User.FindFirst("is_admin") ?? User.FindFirst("IsAdmin");
+                    if (adminClaim != null && bool.TryParse(adminClaim.Value, out var parsed) && parsed)
+                    {
+                        isAdmin = true;
+                    }
+                }
+
+                if (!isAdmin)
+                {
+                    var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "unknown";
+                    _logger.LogWarning("[EndpointExposer] Forbidden POST attempt by user {UserId} from {IP}", userId, remoteIp);
                     return Forbid();
                 }
 
-                // Read request body
                 using var sr = new StreamReader(Request.Body);
                 var body = await sr.ReadToEndAsync();
                 if (string.IsNullOrWhiteSpace(body))
                 {
-                    _logger.LogWarning("[EndpointExposer] Empty POST body by user {UserId} from {IP}", userIdClaim, remoteIp);
+                    _logger.LogWarning("[EndpointExposer] Empty POST body from {IP}", remoteIp);
                     return BadRequest(new { success = false, message = "Empty body" });
                 }
 
-                // Deserialize incoming JSON into a dictionary
                 Dictionary<string, object> incoming;
                 try
                 {
-                    incoming = _json.DeserializeFromString<Dictionary<string, object>>(body);
+                    incoming = JsonConvert.DeserializeObject<Dictionary<string, object>>(body) ?? new Dictionary<string, object>();
                 }
-                catch (Exception dex)
+                catch (JsonException dex)
                 {
-                    _logger.LogWarning(dex, "[EndpointExposer] Invalid JSON from user {UserId} from {IP}", userIdClaim, remoteIp);
+                    _logger.LogWarning(dex, "[EndpointExposer] Invalid JSON from {IP}", remoteIp);
                     return BadRequest(new { success = false, message = "Invalid JSON payload" });
                 }
 
                 if (!IsValidSchedule(incoming, out var validationMessage))
                 {
-                    _logger.LogWarning("[EndpointExposer] Payload validation failed for user {UserId} from {IP}: {Reason}", userIdClaim, remoteIp, validationMessage);
+                    _logger.LogWarning("[EndpointExposer] Payload validation failed from {IP}: {Reason}", remoteIp, validationMessage);
                     return BadRequest(new { success = false, message = $"Invalid payload: {validationMessage}" });
                 }
 
-                // Write atomically with a lock
                 var cfgPath = ConfigFilePath;
                 lock (_fileLock)
                 {
                     EnsureDirectoryExists(Path.GetDirectoryName(cfgPath));
 
-                    // Build the object to persist: { "serverWeekGrid": <incoming> }
                     var toWrite = new Dictionary<string, object>
                     {
                         ["serverWeekGrid"] = incoming
                     };
 
-                    var outJson = _json.SerializeToString(toWrite);
+                    var outJson = JsonConvert.SerializeObject(toWrite, Formatting.None);
 
-                    // Atomic write: write to temp file then replace
                     var tempPath = cfgPath + ".tmp";
                     System.IO.File.WriteAllText(tempPath, outJson);
-                    // If target exists, replace; otherwise move
                     if (System.IO.File.Exists(cfgPath))
                     {
                         System.IO.File.Replace(tempPath, cfgPath, null);
@@ -147,7 +149,8 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
                     }
                 }
 
-                _logger.LogInformation("[EndpointExposer] Config updated by user {UserId} from {IP}", userIdClaim, remoteIp);
+                var userIdLog = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "unknown";
+                _logger.LogInformation("[EndpointExposer] Config updated by user {UserId} from {IP}", userIdLog, remoteIp);
                 return Ok(new { success = true, message = "Configuration updated successfully." });
             }
             catch (Exception ex)
@@ -159,10 +162,9 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
 
         #region Helpers
 
-        // Prefer configurations folder, fallback to plugin folder; migrate if needed
         private string GetConfigDirectory()
         {
-            var appData = _paths.ApplicationDataPath;
+            var appData = ResolveApplicationDataPath();
 
             var cfgDirCandidate = Path.Combine(appData, "plugins", "configurations", "Jellyfin.Plugin.EndpointExposer");
             var pluginDirCandidate = Path.Combine(appData, "plugins", "Jellyfin.Plugin.EndpointExposer", "config");
@@ -170,13 +172,11 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
             var cfgFileCandidate = Path.Combine(cfgDirCandidate, "server-config.json");
             var pluginFileCandidate = Path.Combine(pluginDirCandidate, "server-config.json");
 
-            // If configurations folder exists, use it
             if (Directory.Exists(cfgDirCandidate))
             {
                 return cfgDirCandidate;
             }
 
-            // If plugin folder has an existing file but configurations doesn't exist, migrate it
             if (System.IO.File.Exists(pluginFileCandidate))
             {
                 try
@@ -189,11 +189,9 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "[EndpointExposer] Migration failed, falling back to plugin folder");
-                    // fall through to use plugin folder
                 }
             }
 
-            // Ensure plugin folder exists
             if (!Directory.Exists(pluginDirCandidate))
             {
                 Directory.CreateDirectory(pluginDirCandidate);
@@ -204,7 +202,7 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
 
         private string ConfigFilePath => Path.Combine(GetConfigDirectory(), "server-config.json");
 
-        private void EnsureDirectoryExists(string dir)
+        private void EnsureDirectoryExists(string? dir)
         {
             if (string.IsNullOrEmpty(dir)) return;
             if (!Directory.Exists(dir))
@@ -213,9 +211,7 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
             }
         }
 
-        // Basic validation: incoming must be an object/dictionary with keys that are days or arbitrary strings,
-        // and values should be arrays or simple values. This is intentionally permissive but prevents non-object payloads.
-        private bool IsValidSchedule(Dictionary<string, object> incoming, out string message)
+        private bool IsValidSchedule(Dictionary<string, object> incoming, out string? message)
         {
             message = null;
             if (incoming == null)
@@ -224,23 +220,20 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
                 return false;
             }
 
-            // Accept either a top-level serverWeekGrid object or the direct mapping (days -> items)
-            // If the payload looks like { "serverWeekGrid": { ... } } then unwrap it
             if (incoming.Count == 1 && incoming.ContainsKey("serverWeekGrid") && incoming["serverWeekGrid"] is Newtonsoft.Json.Linq.JObject jObj)
             {
                 try
                 {
                     var dict = jObj.ToObject<Dictionary<string, object>>();
                     incoming.Clear();
-                    foreach (var kv in dict) incoming[kv.Key] = kv.Value;
+                    if (dict != null)
+                    {
+                        foreach (var kv in dict) incoming[kv.Key] = kv.Value;
+                    }
                 }
-                catch
-                {
-                    // leave as-is; validation below will catch issues
-                }
+                catch { }
             }
 
-            // Validate keys and values lightly
             foreach (var kv in incoming)
             {
                 if (string.IsNullOrWhiteSpace(kv.Key))
@@ -249,12 +242,10 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
                     return false;
                 }
 
-                // Accept arrays or single values; if it's a JArray or JObject, it's fine
                 var val = kv.Value;
                 if (val == null) continue;
 
                 var typeName = val.GetType().Name;
-                // Allow common JSON types: JArray, JObject, List<>, Dictionary<>, string, long, double, bool
                 var allowed = typeName.Contains("JArray") || typeName.Contains("JObject") ||
                               typeName.Contains("List") || typeName.Contains("Dictionary") ||
                               typeName == "String" || typeName == "Int64" || typeName == "Int32" ||
@@ -268,6 +259,36 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
             }
 
             return true;
+        }
+
+        private string ResolveApplicationDataPath()
+        {
+            try
+            {
+                if (_paths != null && !string.IsNullOrWhiteSpace(_paths.ApplicationDataPath))
+                {
+                    return _paths.ApplicationDataPath;
+                }
+            }
+            catch
+            {
+                // ignore and fallback
+            }
+
+            if (OperatingSystem.IsWindows())
+            {
+                var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                return Path.Combine(local, "jellyfin");
+            }
+
+            var env = Environment.GetEnvironmentVariable("JELLYFIN_DATA");
+            if (!string.IsNullOrWhiteSpace(env)) return env;
+
+            var xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+            if (!string.IsNullOrWhiteSpace(xdg)) return Path.Combine(xdg, "jellyfin");
+
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(home, ".local", "share", "jellyfin");
         }
 
         #endregion

@@ -1,17 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <AssemblyName>Jellyfin.Plugin.EndpointExposer</AssemblyName>
     <RootNamespace>Jellyfin.Plugin.EndpointExposer</RootNamespace>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
-    <DebugType>portable</DebugType>
-    <DebugSymbols>true</DebugSymbols>
-    <Optimize>false</Optimize>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,8 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="meta.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <!-- meta.json lives in repo root; deploy script copies it into the plugin folder -->
+    <None Include="..\..\meta.json">
+      <Pack>false</Pack>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
 </Project>

@@ -36,7 +36,7 @@ Write-Host "Files copied. Restarting Jellyfin service..."
 Try {
 #   Restart-Service -Name jellyfin -Force -ErrorAction Stop
 #   Write-Host "Jellyfin service restarted."
-start-Process -FilePath pwsh -ArgumentList "-Command & 'C:\Program Files\Jellyfin\Server\jellyfin.exe' --datadir '$ENV:LOCALAPPDATA\jellyfin'"
+    start-Process -FilePath pwsh -ArgumentList "-Command & 'C:\Program Files\Jellyfin\Server\jellyfin.exe' --datadir '$ENV:LOCALAPPDATA\jellyfin'"
 } Catch {
-  Write-Warning "Could not start Jellyfin service automatically. Please start Jellyfin manually."
+    Write-Warning "Could not start Jellyfin service automatically. Please start Jellyfin manually."
 }
