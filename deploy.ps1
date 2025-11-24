@@ -47,8 +47,8 @@ Try {
     Write-Warning "Could not start Jellyfin service automatically. Please start Jellyfin manually."
 }
 
-
-Start-Sleep 15
+Write-Host "Waiting 16 seconds to make sure all the logs are fully created"
+Start-Sleep 16
 
 $jellyfin_last_log = Get-item "$env:LOCALAPPDATA\jellyfin\log\log_*.log" | Select-Object -First 1
 
