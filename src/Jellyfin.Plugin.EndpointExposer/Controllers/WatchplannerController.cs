@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using MediaBrowser.Controller;
@@ -34,7 +36,7 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
         {
             try
             {
-                if (!User?.Identity?.IsAuthenticated ?? true)
+                if (User?.Identity?.IsAuthenticated != true)
                 {
                     _logger.LogWarning("[EndpointExposer] Unauthenticated GET attempt");
                     return Unauthorized(new { success = false, message = "Not authenticated" });
@@ -71,7 +73,7 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
             string remoteIp = HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "unknown";
             try
             {
-                if (!User?.Identity?.IsAuthenticated ?? true)
+                if (User?.Identity?.IsAuthenticated != true)
                 {
                     _logger.LogWarning("[EndpointExposer] Unauthorized POST attempt (no user) from {IP}", remoteIp);
                     return Unauthorized(new { success = false, message = "Not authenticated" });
@@ -263,18 +265,56 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
 
         private string ResolveApplicationDataPath()
         {
+            // Try to read common property names via reflection to be resilient across Jellyfin versions
             try
             {
-                if (_paths != null && !string.IsNullOrWhiteSpace(_paths.ApplicationDataPath))
+                if (_paths != null)
                 {
-                    return _paths.ApplicationDataPath;
+                    var pathsType = _paths.GetType();
+
+                    // Direct property ApplicationDataPath
+                    var prop = pathsType.GetProperty("ApplicationDataPath", BindingFlags.Public | BindingFlags.Instance);
+                    if (prop != null)
+                    {
+                        var val = prop.GetValue(_paths) as string;
+                        if (!string.IsNullOrWhiteSpace(val)) return val;
+                    }
+
+                    // Some versions expose ApplicationPaths property which itself has ApplicationDataPath
+                    var appPathsProp = pathsType.GetProperty("ApplicationPaths", BindingFlags.Public | BindingFlags.Instance);
+                    if (appPathsProp != null)
+                    {
+                        var appPathsObj = appPathsProp.GetValue(_paths);
+                        if (appPathsObj != null)
+                        {
+                            var innerProp = appPathsObj.GetType().GetProperty("ApplicationDataPath", BindingFlags.Public | BindingFlags.Instance);
+                            if (innerProp != null)
+                            {
+                                var val = innerProp.GetValue(appPathsObj) as string;
+                                if (!string.IsNullOrWhiteSpace(val)) return val;
+                            }
+                        }
+                    }
+
+                    // Try other common names
+                    var altNames = new[] { "ApplicationDataFolder", "AppDataPath", "DataPath" };
+                    foreach (var name in altNames)
+                    {
+                        var p = pathsType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+                        if (p != null)
+                        {
+                            var v = p.GetValue(_paths) as string;
+                            if (!string.IsNullOrWhiteSpace(v)) return v;
+                        }
+                    }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // ignore and fallback
+                _logger.LogDebug(ex, "[EndpointExposer] Reflection attempt to read IServerApplicationPaths failed; falling back to defaults.");
             }
 
+            // Fallbacks by platform / environment
             if (OperatingSystem.IsWindows())
             {
                 var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
