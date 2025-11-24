@@ -1,0 +1,7 @@
+{
+  "name": "Endpoint Exposer",
+  "guid": "f1530767-390f-475e-afa2-6610c933c29e",
+  "version": "1.0.0.0",
+  "description": "Replace this description later",
+  "assembly": "Jellyfin.Plugin.EndpointExposer.dll"
+}

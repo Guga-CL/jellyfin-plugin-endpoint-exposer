@@ -1,0 +1,35 @@
+# Build
+bin/
+obj/
+dist/
+
+# VS Code
+.vscode/
+*.code-workspace
+.vs/
+
+# User files
+*.user
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# NuGet
+*.nupkg
+.nuget/
+
+# Script
+*.ps1
+*.psm1
+
+#Others
+.idea/
+artifacts
+Release
+*.zip
+node_modules
+Jellyfin.Plugin.EndpointExposer.sln
+My.Custom.Section.Plugin.bak/
+scripts/build-it/version.txt
