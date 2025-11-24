@@ -2,6 +2,8 @@ param(
   [string]$Configuration = "Release"
 )
 
+Clear-Host
+
 $proj = ".\src\Jellyfin.Plugin.EndpointExposer\Jellyfin.Plugin.EndpointExposer.csproj"
 
 if (-not (Test-Path $proj)) {

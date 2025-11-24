@@ -13,31 +13,38 @@ namespace Jellyfin.Plugin.EndpointExposer
         {
             try
             {
+                var pluginDir = GetPluginDir();
+                Directory.CreateDirectory(pluginDir);
+
+                // Remove previous diagnostics so only the most recent files remain
+                TryDeleteFiles(pluginDir, "assembly-loaded.txt");
+                TryDeleteFiles(pluginDir, "firstchance-*.log");
+                TryDeleteFiles(pluginDir, "*-exception-*.log");
+
                 AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
                 {
                     try
                     {
-                        DumpException("firstchance", e.Exception);
+                        // Delete previous firstchance logs before writing the new one
+                        TryDeleteFiles(pluginDir, "firstchance-*.log");
+                        DumpException(pluginDir, "firstchance", e.Exception);
                     }
                     catch { /* swallow */ }
                 };
 
                 // Write a quick "assembly loaded" marker so we know the initializer ran
-                TryWriteText("assembly-loaded.txt", $"Assembly loaded at {DateTime.UtcNow:O}");
+                TryWriteText(pluginDir, "assembly-loaded.txt", $"Assembly loaded at {DateTime.UtcNow:O}");
             }
             catch (Exception ex)
             {
-                TryWriteText("diagnostics-init-failed.txt", ex.ToString());
+                TryWriteText(GetPluginDir(), "diagnostics-init-failed.txt", ex.ToString());
             }
         }
 
-        private static void DumpException(string prefix, Exception ex)
+        private static void DumpException(string pluginDir, string prefix, Exception ex)
         {
             try
             {
-                var pluginDir = GetPluginDir();
-                Directory.CreateDirectory(pluginDir);
-
                 var file = Path.Combine(pluginDir, $"{prefix}-{DateTime.UtcNow:yyyyMMddHHmmssfff}.log");
                 using var sw = new StreamWriter(file, append: false);
                 sw.WriteLine($"Timestamp: {DateTime.UtcNow:O}");
@@ -68,13 +75,24 @@ namespace Jellyfin.Plugin.EndpointExposer
             }
         }
 
-        private static void TryWriteText(string fileName, string text)
+        private static void TryWriteText(string pluginDir, string fileName, string text)
         {
             try
             {
-                var pluginDir = GetPluginDir();
-                Directory.CreateDirectory(pluginDir);
                 File.WriteAllText(Path.Combine(pluginDir, fileName), text);
+            }
+            catch { }
+        }
+
+        private static void TryDeleteFiles(string pluginDir, string searchPattern)
+        {
+            try
+            {
+                var files = Directory.GetFiles(pluginDir, searchPattern);
+                foreach (var f in files)
+                {
+                    try { File.Delete(f); } catch { /* ignore */ }
+                }
             }
             catch { }
         }

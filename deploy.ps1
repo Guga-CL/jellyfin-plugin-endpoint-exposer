@@ -42,13 +42,18 @@ Write-Host "Files copied. Restarting Jellyfin service..."
 Try {
 #   Restart-Service -Name jellyfin -Force -ErrorAction Stop
 #   Write-Host "Jellyfin service restarted."
-    start-Process -FilePath pwsh -ArgumentList "-Command & 'C:\Program Files\Jellyfin\Server\jellyfin.exe' --datadir '$ENV:LOCALAPPDATA\jellyfin'"
+    Start-Process -FilePath pwsh -ArgumentList "-Command & 'C:\Program Files\Jellyfin\Server\jellyfin.exe' --datadir '$ENV:LOCALAPPDATA\jellyfin'"
+    Start-Sleep 2
+    Write-Host "Jellyfin process started:"
+    Get-Process -Name "jellyfin"
 } Catch {
     Write-Warning "Could not start Jellyfin service automatically. Please start Jellyfin manually."
 }
 
 Write-Host "Waiting 16 seconds to make sure all the logs are fully created"
 Start-Sleep 16
+
+Get-ChildItem "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer" | Select-Object Name, LastWriteTime
 
 $jellyfin_last_log = Get-item "$env:LOCALAPPDATA\jellyfin\log\log_*.log" | Select-Object -First 1
 
