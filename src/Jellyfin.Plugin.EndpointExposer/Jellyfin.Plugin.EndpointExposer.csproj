@@ -19,7 +19,6 @@
     <PackageReference Include="Jellyfin.Controller" Version="10.11.3" />
     <PackageReference Include="Jellyfin.Model" Version="10.11.3" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="MediaBrowser.Model.Serialization" Version="10.11.3" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
   </ItemGroup>
