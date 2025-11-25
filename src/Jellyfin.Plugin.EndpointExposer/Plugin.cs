@@ -1,21 +1,43 @@
-﻿// src/Jellyfin.Plugin.EndpointExposer/Plugin.cs
+﻿using System;
+using System.IO;
 using MediaBrowser.Common.Plugins;
 
 namespace Jellyfin.Plugin.EndpointExposer
 {
     public class Plugin : BasePlugin
     {
-        public Plugin()
+        // Required: implement Name (abstract on BasePlugin)
+        public override string Name => "Endpoint Exposer";
+
+        // Optional: short description
+        public override string Description => "Expose a secure endpoint to write watchplanner config";
+
+        // Keep constructor trivial and non-throwing.
+        public Plugin() : base()
         {
-            // Keep constructor trivial. Do not access services, files, or network here.
-            // If you need to initialize diagnostics, call a safe init method from a startup hook.
+            // Intentionally empty. Do not perform IO or network here.
+            // If you need to initialize diagnostics or other services,
+            // call InitializeIfNeeded() from a controller or a safe startup task.
         }
 
-        public override void OnApplicationStarted()
+        // Safe explicit initializer you can call after the host is ready.
+        public void InitializeIfNeeded()
         {
-            base.OnApplicationStarted();
-            // Safe place to initialize diagnostics and other services.
-            PluginDiagnostics.InitFromPluginConstructor(); // rename if needed
+            try
+            {
+                var pluginDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) ?? ".",
+                    "jellyfin", "plugins", "Jellyfin.Plugin.EndpointExposer");
+
+                Directory.CreateDirectory(pluginDir);
+
+                // Keep any further initialization minimal and guarded with try/catch.
+                // Example: PluginDiagnostics.InitFromSafeContext(pluginDir);
+            }
+            catch
+            {
+                // swallow: plugin construction must not throw
+            }
         }
     }
 }

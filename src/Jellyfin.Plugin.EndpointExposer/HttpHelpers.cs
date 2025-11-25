@@ -15,7 +15,12 @@ namespace Jellyfin.Plugin.EndpointExposer
             int maxRetries = 3,
             CancellationToken cancellationToken = default)
         {
-            var client = clientName is null ? httpFactory.CreateClient() : httpFactory.CreateClient(clientName);
+            if (httpFactory == null) throw new ArgumentNullException(nameof(httpFactory));
+
+            var client = string.IsNullOrEmpty(clientName)
+                ? httpFactory.CreateClient()
+                : httpFactory.CreateClient(clientName);
+
             var attempt = 0;
             var delay = TimeSpan.FromSeconds(1);
 
