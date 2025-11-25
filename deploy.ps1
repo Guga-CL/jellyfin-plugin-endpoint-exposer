@@ -61,4 +61,12 @@ Get-ChildItem "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExpose
 
 $jellyfin_last_log = Get-item "$env:LOCALAPPDATA\jellyfin\log\log_*.log" | Select-Object -First 1
 
+
+Get-Content "$env:LOCALAPPDATA\jellyfin\log\log_*.log" -Tail 400 |
+  Select-String -Pattern "Error creating", "Jellyfin.Plugin.EndpointExposer" -Context 6,12
+
+Get-Item "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\ctor-exception.txt"
+Get-Content "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\ctor-exception.txt" -ErrorAction SilentlyContinue
+
+
 Set-Content -Path "$desktop_folder\jellyfin_last_log.txt" -Value (get-content $jellyfin_last_log -raw)

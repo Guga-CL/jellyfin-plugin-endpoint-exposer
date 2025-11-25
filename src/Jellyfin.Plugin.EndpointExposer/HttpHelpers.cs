@@ -7,7 +7,6 @@ namespace Jellyfin.Plugin.EndpointExposer
 {
     internal static class HttpHelpers
     {
-        // Simple retry with 429 handling and exponential backoff
         public static async Task<HttpResponseMessage> SendWithRetryAsync(
             Func<HttpClient, Task<HttpResponseMessage>> action,
             IHttpClientFactory httpFactory,
@@ -33,7 +32,6 @@ namespace Jellyfin.Plugin.EndpointExposer
 
                     if ((int)resp.StatusCode == 429 && attempt <= maxRetries)
                     {
-                        // Respect Retry-After header if present
                         if (resp.Headers.RetryAfter != null)
                         {
                             var retryAfter = resp.Headers.RetryAfter.Delta ?? TimeSpan.FromSeconds(5);
