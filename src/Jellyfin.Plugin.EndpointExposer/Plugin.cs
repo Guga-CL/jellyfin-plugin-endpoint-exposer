@@ -1,17 +1,21 @@
-﻿using System;
+﻿// src/Jellyfin.Plugin.EndpointExposer/Plugin.cs
 using MediaBrowser.Common.Plugins;
 
 namespace Jellyfin.Plugin.EndpointExposer
 {
     public class Plugin : BasePlugin
     {
-        public override string Name => "Endpoint Exposer";
-        public override string Description => "Expose a secure endpoint to write watchplanner config";
-
-        // Minimal, guaranteed non-throwing constructor
-        public Plugin() : base()
+        public Plugin()
         {
-            // Intentionally empty — no diagnostics, no IO, no network.
+            // Keep constructor trivial. Do not access services, files, or network here.
+            // If you need to initialize diagnostics, call a safe init method from a startup hook.
+        }
+
+        public override void OnApplicationStarted()
+        {
+            base.OnApplicationStarted();
+            // Safe place to initialize diagnostics and other services.
+            PluginDiagnostics.InitFromPluginConstructor(); // rename if needed
         }
     }
 }
