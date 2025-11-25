@@ -40,6 +40,7 @@ if (Test-Path ".\meta.json") {
 
 Write-Host "removing all logs before starting the jellyfin process"
 Get-ChildItem "$env:LOCALAPPDATA\jellyfin\log\" | remove-item
+Remove-Item "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\*.txt"
 
 Write-Host "Files copied. Restarting Jellyfin service..."
 # Restart service (adjust service name if different)
@@ -53,11 +54,12 @@ Try {
 } Catch {
     Write-Warning "Could not start Jellyfin service automatically. Please start Jellyfin manually."
 }
+""
 
 Write-Host "Waiting 16 seconds to make sure all the logs are fully created"
 Start-Sleep 16
 
-Get-ChildItem "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer" | Select-Object Name, LastWriteTime
+Get-ChildItem "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer" | Select-Object Name, LastWriteTime | out-host
 
 $jellyfin_last_log = Get-item "$env:LOCALAPPDATA\jellyfin\log\log_*.log" | Select-Object -First 1
 
@@ -65,8 +67,11 @@ $jellyfin_last_log = Get-item "$env:LOCALAPPDATA\jellyfin\log\log_*.log" | Selec
 Get-Content "$env:LOCALAPPDATA\jellyfin\log\log_*.log" -Tail 400 |
   Select-String -Pattern "Error creating", "Jellyfin.Plugin.EndpointExposer" -Context 6,12
 
+Get-Item "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\early-exception.txt"
+Get-Content "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\early-exception.txt" -raw -ErrorAction SilentlyContinue | ForEach-Object { $_.Substring(0,298) }
+
 Get-Item "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\ctor-exception.txt"
-Get-Content "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\ctor-exception.txt" -ErrorAction SilentlyContinue
+Get-Content "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\ctor-exception.txt" -raw -ErrorAction SilentlyContinue | ForEach-Object { $_.Substring(0,298) }
 
 
-Set-Content -Path "$desktop_folder\jellyfin_last_log.txt" -Value (get-content $jellyfin_last_log -raw)
+Set-Content -Path "$desktop_folder\jellyfin_last_log.txt" -Value (get-content $jellyfin_last_log -raw) -Force
