@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 namespace Jellyfin.Plugin.EndpointExposer
 {
@@ -11,20 +10,21 @@ namespace Jellyfin.Plugin.EndpointExposer
         private const string FirstChanceFile = "firstchance.txt";
         private const string InitFailedFile = "diagnostics-init-failed.txt";
 
-        [ModuleInitializer]
-        public static void InitModule()
+        // Called explicitly from Plugin constructor (safe place).
+        public static void InitFromPluginConstructor()
         {
             try
             {
                 var pluginDir = GetPluginDir();
                 Directory.CreateDirectory(pluginDir);
 
-                // Remove previous diagnostics once at init
+                // Remove old diagnostics files (best-effort)
                 TryDeleteFiles(pluginDir, AssemblyMarker);
                 TryDeleteFiles(pluginDir, FirstChanceFile);
                 TryDeleteFiles(pluginDir, "*-exception-*.txt");
                 TryDeleteFiles(pluginDir, InitFailedFile);
 
+                // Register a lightweight FirstChance handler that only writes a small text file.
                 AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
                 {
                     try
@@ -41,7 +41,17 @@ namespace Jellyfin.Plugin.EndpointExposer
             }
             catch (Exception ex)
             {
-                TryWriteText(GetPluginDir(), InitFailedFile, ex.ToString());
+                // If diagnostics initialization fails, write a tiny file so we can see it.
+                try
+                {
+                    var pluginDir = GetPluginDir();
+                    Directory.CreateDirectory(pluginDir);
+                    TryWriteText(pluginDir, InitFailedFile, ex.ToString());
+                }
+                catch
+                {
+                    // swallow
+                }
             }
         }
 
@@ -50,10 +60,11 @@ namespace Jellyfin.Plugin.EndpointExposer
             try
             {
                 var content = BuildDumpContent(ex);
-                var temp = Path.Combine(pluginDir, $"{FirstChanceFile}.tmp");
-                File.WriteAllText(temp, content);
-
                 var target = Path.Combine(pluginDir, FirstChanceFile);
+
+                // Write atomically: write to temp then replace/move
+                var temp = Path.Combine(pluginDir, $"{FirstChanceFile}.{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(temp, content);
 
                 try
                 {
