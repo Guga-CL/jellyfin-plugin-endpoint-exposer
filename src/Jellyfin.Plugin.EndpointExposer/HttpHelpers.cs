@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.EndpointExposer
         public static async Task<HttpResponseMessage> SendWithRetryAsync(
             Func<HttpClient, Task<HttpResponseMessage>> action,
             IHttpClientFactory httpFactory,
-            string clientName = null,
+            string? clientName = null,
             int maxRetries = 3,
             CancellationToken cancellationToken = default)
         {

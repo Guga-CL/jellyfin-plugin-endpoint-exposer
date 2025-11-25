@@ -35,8 +35,8 @@ if (Test-Path ".\meta.json") {
 }
 
 
-Get-ChildItem "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\Meta.json"
-Get-Content "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\Meta.json"
+# Get-ChildItem "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\Meta.json"
+# Get-Content "$env:LOCALAPPDATA\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer\Meta.json"
 
 Write-Host "removing all logs before starting the jellyfin process"
 Get-ChildItem "$env:LOCALAPPDATA\jellyfin\log\" | remove-item
