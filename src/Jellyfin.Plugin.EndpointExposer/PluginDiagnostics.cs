@@ -25,12 +25,10 @@ namespace Jellyfin.Plugin.EndpointExposer
                 TryDeleteFiles(pluginDir, "*-exception-*.txt");
                 TryDeleteFiles(pluginDir, InitFailedFile);
 
-                // Subscribe to first-chance exceptions
                 AppDomain.CurrentDomain.FirstChanceException += (s, e) =>
                 {
                     try
                     {
-                        // Write a single rolling file safely (temp -> move)
                         DumpFirstChance(pluginDir, e.Exception);
                     }
                     catch
@@ -51,27 +49,20 @@ namespace Jellyfin.Plugin.EndpointExposer
         {
             try
             {
-                // Prepare content
                 var content = BuildDumpContent(ex);
-
-                // Write to temp file first
                 var temp = Path.Combine(pluginDir, $"{FirstChanceFile}.tmp");
                 File.WriteAllText(temp, content);
 
                 var target = Path.Combine(pluginDir, FirstChanceFile);
 
-                // Replace atomically where possible
                 try
                 {
-                    // If target exists, replace it; otherwise move
                     if (File.Exists(target))
                     {
-                        // File.Replace requires a backup path; use null for no backup on some platforms
                         var backup = Path.Combine(pluginDir, $"{FirstChanceFile}.bak");
                         try
                         {
                             File.Replace(temp, target, backup, ignoreMetadataErrors: true);
-                            // remove backup if created
                             if (File.Exists(backup))
                             {
                                 try { File.Delete(backup); } catch { }
@@ -79,7 +70,6 @@ namespace Jellyfin.Plugin.EndpointExposer
                         }
                         catch
                         {
-                            // Fallback to Move with overwrite
                             try { File.Delete(target); } catch { }
                             File.Move(temp, target);
                         }
@@ -91,7 +81,6 @@ namespace Jellyfin.Plugin.EndpointExposer
                 }
                 catch
                 {
-                    // Best-effort: if atomic replace fails, try to write directly with sharing
                     try
                     {
                         File.WriteAllText(target, content);
