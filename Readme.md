@@ -3,7 +3,7 @@
 Work in progress, not ready for use
 
 ### Information about Jellyfin Plugin Development
-- Skeleton Plugin.cs loads with no issues
+- Plugin.cs Skeleton loads with no issues, this is the starting point.
 
 #### Objective
 **Expose a secure HTTP endpoint** that accepts a JSON payload and writes a file in the local disc.
