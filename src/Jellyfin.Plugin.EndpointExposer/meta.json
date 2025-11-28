@@ -1,6 +1,6 @@
 {
   "name": "Endpoint Exposer",
-  "description": "Expose a secure endpoint to write watchplanner config",
+  "description": "Expose a secure endpoint to write to disk",
   "version": "1.0.0.1",
   "guid": "f1530767-390f-475e-afa2-6610c933c29e",
   "assemblies": [ "Jellyfin.Plugin.EndpointExposer.dll" ],

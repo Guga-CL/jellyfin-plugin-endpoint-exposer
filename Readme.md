@@ -1,19 +1,39 @@
-## Jellyfin Plugin Endpoint Exposer
+# Jellyfin Plugin Endpoint Exposer
 
-Work in progress, not ready for use
+**Work in progress — not ready for production**
 
-### Information about Jellyfin Plugin Development
-- Plugin.cs Skeleton loads with no issues, this is the starting point.
+---
 
-#### Objective
-**Expose a secure HTTP endpoint** that accepts a JSON payload and writes a file in the local disc.
-With this we will replace the need of using: caddy + reverse proxy + ps1/node script to write to the disc.
+## Status
+**Working baseline:** a minimal `Plugin.cs` skeleton that inherits `BasePlugin<BasePluginConfiguration>` and exposes the required constructor loads cleanly in Jellyfin 10.11.3.
 
-#### What makes Plugin.cs not load in Jellyfin
-- Wrong base class: inherit from BasePlugin without a configuration type. Jellyfin's plugin loader expects most plugins to derive from BasePlugin<TConfig> (usually BasePluginConfiguration). That mismatch can cause PluginManager.CreatePluginInstance to throw a NullReferenceException when it tries to wire up configuration paths and serializers.
+---
 
-- Missing constructor signature: Jellyfin calls the plugin constructor with IApplicationPaths and IXmlSerializer (and sometimes an ILogger). My earlier minimal version only had a parameterless constructor, so the loader couldn't find a matching ctor and failed.
+## Overview
+**Objective:** expose a secure HTTP endpoint that accepts a JSON payload and writes a file to the server disk.  
+This replaces the current external tooling (Caddy + reverse proxy + PS1/Node scripts) used to write files to the server.
 
-- Static initialization: Adding a static constructor that registered encodings was unnecessary and introduced complexity. Jellyfin doesn't need that for plugin loading, and it can confuse the loader if the static ctor throws or runs too early.
+---
 
-- Jellyfin loads plugin assemblies and may instantiate plugin types synchronously or run plugin manager tasks that expect constructors and type initializers to be cheap and non‑blocking.
+## Why plugins sometimes fail to load
+- **Wrong base class** — Plugins must inherit `BasePlugin<TConfig>` (commonly `BasePluginConfiguration`). Using plain `BasePlugin` can break the loader.  
+- **Missing constructor signature** — Jellyfin expects constructors that accept `IApplicationPaths` and `IXmlSerializer` (and optionally `ILogger<T>`). A parameterless ctor will not match the loader's reflection calls.  
+- **Static initialization** — Static ctors or heavy type initializers can run too early or throw; keep type initializers minimal and side‑effect free.  
+- **Constructor side effects** — PluginManager may instantiate plugins synchronously; constructors and initializers should be cheap and non‑blocking.
+
+---
+
+## How to test locally
+- **Build**: `dotnet build -c Release` in the plugin project.  
+- **Deploy**: copy `Jellyfin.Plugin.EndpointExposer.dll` and `meta.json` into `%LOCALAPPDATA%\jellyfin\plugins\Jellyfin.Plugin.EndpointExposer`.  
+- **Verify**: check Jellyfin logs for `Loaded plugin: "Endpoint Exposer"` and for any `Error creating` entries.  
+- **Quick reflection test**: run a small PowerShell snippet to `Assembly.LoadFrom(...)`, `GetType(...)`, `Activator.CreateInstance(...)` and read `Name`/`Description`/`Id` to reproduce the loader path outside Jellyfin.
+
+---
+
+## Notes and next steps
+- Start from the minimal working `Plugin.cs` that inherits `BasePlugin<BasePluginConfiguration>` and exposes the expected ctor.  
+- Add features incrementally (logging, delayed registration, endpoint wiring). After each change, rebuild and redeploy to confirm the plugin still loads.  
+- Keep constructors and static initializers side‑effect free; move work to background tasks started after construction if needed.
+
+---
