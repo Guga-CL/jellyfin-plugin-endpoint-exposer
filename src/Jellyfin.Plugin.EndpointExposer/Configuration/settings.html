@@ -1,0 +1,329 @@
+<div
+  data-role="page"
+  id="endpointExposerConfigurationPage"
+  class="page type-interior pluginConfigurationPage fullWidthContent"
+  data-controller="__plugin/EndpointExposer.js"
+>
+  <div class="content-primary">
+    <div class="verticalSection">
+      <div class="sectionTitleContainer">
+        <h2 class="sectionTitle">Endpoint Exposer</h2>
+      </div>
+    </div>
+
+    <form class="endpointExposerConfigurationForm" id="ee-config-form">
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="text"
+          id="ServerBaseUrl"
+          label="Server Base URL"
+          placeholder="http://yourhost:8096"
+        />
+        <span>Base URL used by the plugin for callbacks and links.</span>
+      </div>
+
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="text"
+          id="ApiKey"
+          label="API Key"
+          placeholder="Optional API key for header-based writes"
+        />
+        <span>Optional API key used for header-based writes.</span>
+      </div>
+
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="text"
+          id="OutputDirectory"
+          label="Output Directory"
+          placeholder="Leave blank for default app data path"
+        />
+        <span
+          >Directory where files will be written. Leave blank for default.</span
+        >
+      </div>
+
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="number"
+          id="MaxPayloadBytes"
+          label="Max Payload Bytes"
+          min="1024"
+          step="1024"
+        />
+        <span>Maximum allowed payload size in bytes.</span>
+      </div>
+
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="number"
+          id="MaxBackups"
+          label="Max Backups"
+          min="0"
+        />
+        <span>Number of backups to keep for written files.</span>
+      </div>
+
+      <!-- Exposed Folders (styled) -->
+      <div
+        id="ee-exposed-folders-section"
+        class="verticalSection"
+        style="
+          padding: 0.5em 0.75em;
+          margin-bottom: 1em;
+          border-radius: 8px;
+          background: transparent;
+        "
+      >
+        <h3 class="sectionTitle">Exposed Folders</h3>
+        <p class="muted">
+          Create logical folders that the plugin exposes for read/write. Folder
+          tokens must match <code>^[a-z0-9_-]+$</code>.
+        </p>
+
+        <table
+          id="ee-folders-table"
+          class="ee-table"
+          style="width: 100%; margin-top: 0.5em"
+        >
+          <thead>
+            <tr>
+              <th style="width: 20%">Name</th>
+              <th style="width: 30%">Relative Path</th>
+              <th style="width: 12%">Allow Non-Admin</th>
+              <th style="width: 30%">Description</th>
+              <th style="width: 8%"></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div
+          class="ee-controls"
+          style="margin-top: 0.75em; display: flex; gap: 0.5em"
+        >
+          <button
+            id="ee-add-folder"
+            is="emby-button"
+            type="button"
+            class="raised emby-button"
+          >
+            <span>Add Folder</span>
+          </button>
+          <button
+            id="ee-import-folders"
+            is="emby-button"
+            type="button"
+            class="raised emby-button"
+          >
+            <span>Import from JSON</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Registered Files (legacy) — collapsible -->
+      <details
+        class="verticalSection"
+        id="ee-registered-files-details"
+        style="
+          background-color: rgba(255, 255, 255, 0.02);
+          border-radius: 8px;
+          margin-bottom: 1em;
+        "
+      >
+        <summary
+          style="
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            padding: 0.75em 1em;
+          "
+        >
+          <i
+            class="material-icons arrow-icon"
+            aria-hidden="true"
+            style="
+              transition: transform 0.18s ease-in-out;
+              transform: rotate(0deg);
+            "
+            >arrow_right</i
+          >
+          <h3 class="sectionTitle" style="margin: 0 0 0 0.5em">
+            Registered Files (legacy)
+          </h3>
+        </summary>
+
+        <div
+          style="padding: 1em; border-top: 1px solid rgba(255, 255, 255, 0.04)"
+        >
+          <p class="muted">
+            Optional JSON array of file entries. Use the structured Exposed
+            Folders UI for new setups.
+          </p>
+          <textarea
+            id="ee-registered-files"
+            is="emby-textarea"
+            class="emby-input"
+            rows="6"
+            style="width: 100%"
+          ></textarea>
+        </div>
+      </details>
+
+      <!-- Raw configuration (read-only) — collapsible -->
+      <details
+        class="verticalSection"
+        id="ee-raw-details"
+        style="
+          background-color: rgba(255, 255, 255, 0.02);
+          border-radius: 8px;
+          margin-bottom: 1em;
+        "
+      >
+        <summary
+          style="
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            padding: 0.75em 1em;
+          "
+        >
+          <i
+            class="material-icons arrow-icon"
+            aria-hidden="true"
+            style="
+              transition: transform 0.18s ease-in-out;
+              transform: rotate(0deg);
+            "
+            >arrow_right</i
+          >
+          <h3 class="sectionTitle" style="margin: 0 0 0 0.5em">
+            Raw configuration (read-only)
+          </h3>
+        </summary>
+
+        <div
+          style="padding: 1em; border-top: 1px solid rgba(255, 255, 255, 0.04)"
+        >
+          <pre
+            id="ee-raw"
+            style="
+              white-space: pre-wrap;
+              background: var(--cardBackground);
+              padding: 8px;
+              border-radius: 4px;
+              font-family: monospace;
+              color: var(--primaryText);
+            "
+          ></pre>
+        </div>
+      </details>
+
+      <label class="checkboxContainer checkboxContainer-withDescription">
+        <input
+          id="AllowNonAdmin"
+          type="checkbox"
+          is="emby-checkbox"
+          class="emby-checkbox"
+          label="Allow non-admin writes"
+        />
+        <span>Allow non-admin writes</span>
+      </label>
+
+      <div style="margin-top: 1em">
+        <button
+          is="emby-button"
+          id="ee-load"
+          type="button"
+          class="raised emby-button"
+        >
+          <span>Load</span>
+        </button>
+
+        <button
+          is="emby-button"
+          id="ee-save"
+          type="submit"
+          class="raised button-submit emby-button"
+        >
+          <span>Save</span>
+        </button>
+
+        <button
+          is="emby-button"
+          id="ee-fetch"
+          type="button"
+          class="raised emby-button"
+        >
+          <span>Fetch current config (raw)</span>
+        </button>
+
+        <span id="ee-status" style="margin-left: 12px"></span>
+      </div>
+
+      <div
+        id="ee-raw"
+        style="margin-top: 1em; white-space: pre-wrap; font-family: monospace"
+      ></div>
+    </form>
+  </div>
+
+  <style>
+    /* Minimal layout helpers preserved from Webhook style */
+    .checkboxContainer {
+      max-width: fit-content;
+    }
+    .inputContainer {
+      margin-bottom: 0.75em;
+    }
+    .inputLabel {
+      display: block;
+      margin-top: 0.25em;
+      color: var(--secondaryText);
+    }
+    .inputLabelUnfocused {
+      opacity: 0.8;
+    }
+
+    /* Rotate arrow when details is open */
+    details[open] .arrow-icon {
+      transform: rotate(90deg);
+    }
+
+    /* Table inputs adopt Jellyfin input sizing */
+    #ee-folders-table input.emby-input {
+      width: 100%;
+      box-sizing: border-box;
+    }
+    #ee-folders-table textarea.emby-input {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    /* Row spacing */
+    #ee-folders-table td {
+      vertical-align: middle;
+      padding: 0.35em 0.5em;
+    }
+
+    /* Center checkbox column */
+    #ee-folders-table td:nth-child(3) {
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    /* Raw config pre */
+    #ee-raw {
+      max-height: 320px;
+      overflow: auto;
+    }
+  </style>
+</div>

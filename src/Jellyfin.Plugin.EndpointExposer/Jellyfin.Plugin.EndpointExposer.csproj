@@ -4,6 +4,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PublishTrimmed>false</PublishTrimmed>
+    <RootNamespace>Jellyfin.Plugin.EndpointExposer</RootNamespace>
+    <AssemblyName>Jellyfin.Plugin.EndpointExposer</AssemblyName>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Debug'">
@@ -13,15 +15,30 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Use the Jellyfin package IDs that restore from nuget.org in your environment -->
     <PackageReference Include="Jellyfin.Common" Version="10.11.3" />
     <PackageReference Include="Jellyfin.Controller" Version="10.11.3" />
     <PackageReference Include="Jellyfin.Model" Version="10.11.3" />
+
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Embed settings files with explicit logical names so IHasWebPages / resource lookup finds them -->
+    <EmbeddedResource Include="Configuration\settings.html">
+      <LogicalName>$(RootNamespace).Configuration.settings.html</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Configuration\settings.js">
+      <LogicalName>$(RootNamespace).Configuration.settings.js</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- <ItemGroup>
     <None Update="meta.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
+  </ItemGroup> -->
 </Project>
