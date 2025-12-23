@@ -35,3 +35,4 @@ My.Custom.Section.Plugin.bak/
 *.sln
 deploy.ps1
 build.ps1
+scripts/data/apik.txt
