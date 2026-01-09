@@ -1,449 +1,732 @@
-// Configuration\settings.js adapted for EndpointExposer
+// Configuration/settings.js
 var EndpointExposerConfigurationPage = {
     pluginUniqueId: "f1530767-390f-475e-afa2-6610c933c29e",
     _currentConfig: null,
 
     loadConfiguration: function (view) {
+        console.debug('EE: loadConfiguration start', { ApiClient: typeof ApiClient, Dashboard: typeof Dashboard });
         Dashboard.showLoadingMsg();
 
-        ApiClient.getPluginConfiguration(EndpointExposerConfigurationPage.pluginUniqueId).then(function (config) {
-            EndpointExposerConfigurationPage._currentConfig = config || {};
+        ApiClient.getPluginConfiguration(EndpointExposerConfigurationPage.pluginUniqueId)
+            .then(function (config) {
+                // Always keep a non-null current config
+                EndpointExposerConfigurationPage._currentConfig = config || {};
 
-            const get = id => view.querySelector('#' + id);
-
-            const serverEl = get('ServerBaseUrl');
-            if (serverEl) serverEl.value = config.ServerBaseUrl || '';
-
-            const apiKeyEl = get('ApiKey');
-            if (apiKeyEl) apiKeyEl.value = config.ApiKey || '';
-
-            const allowEl = get('AllowNonAdmin');
-            if (allowEl) allowEl.checked = !!config.AllowNonAdmin;
-
-            const outDirEl = get('OutputDirectory');
-            if (outDirEl) outDirEl.value = config.OutputDirectory || '';
-
-            const maxPayloadEl = get('MaxPayloadBytes');
-            if (maxPayloadEl) maxPayloadEl.value = config.MaxPayloadBytes || 0;
-
-            const maxBackupsEl = get('MaxBackups');
-            if (maxBackupsEl) maxBackupsEl.value = config.MaxBackups || 0;
-
-            // Legacy RegisteredFiles textarea (kept for compatibility)
-            const regFilesEl = get('RegisteredFiles');
-            if (regFilesEl) regFilesEl.value = JSON.stringify(config.RegisteredFiles || [], null, 2);
-
-            // Populate the structured Exposed Folders UI and raw view
-            if (typeof EndpointExposerConfigurationPage.loadConfigurationToUi === 'function') {
+                // Populate basic inputs (defensive)
+                const get = id => view.querySelector('#' + id);
                 try {
-                    EndpointExposerConfigurationPage.loadConfigurationToUi(config);
+                    if (get('ServerBaseUrl')) get('ServerBaseUrl').value = (config && config.ServerBaseUrl) || '';
+                    if (get('ApiKey')) get('ApiKey').value = (config && config.ApiKey) || '';
+                    if (get('OutputDirectory')) get('OutputDirectory').value = (config && config.OutputDirectory) || '';
+                    if (get('MaxPayloadBytes')) get('MaxPayloadBytes').value = (config && config.MaxPayloadBytes) || 0;
+                    if (get('MaxBackups')) get('MaxBackups').value = (config && config.MaxBackups) || 0;
                 } catch (e) {
-                    console.warn('Failed to populate Exposed Folders UI:', e);
+                    console.warn('EE: input population failed', e);
                 }
-            }
 
-            Dashboard.hideLoadingMsg();
-        }).catch(function (err) {
-            Dashboard.hideLoadingMsg();
-            console.error('Failed to load plugin configuration', err);
-        });
+                // Ensure raw configuration is always visible for debugging
+                try {
+                    const rawEl = view.querySelector('#ee-raw');
+                    if (rawEl) rawEl.textContent = JSON.stringify(config || {}, null, 2);
+                } catch (e) { /* ignore */ }
+
+                // Wait for the page-scoped factory to be available before rendering UI that depends on it.
+                (function waitForFactoryAndRender(cfg, attempts = 20, delayMs = 100) {
+                    const ready = !!(window.EndpointExposerConfigurationPage && typeof window.EndpointExposerConfigurationPage.createFolderCard === 'function');
+                    if (ready) {
+                        try {
+                            if (typeof EndpointExposerConfigurationPage.loadConfigurationToUi === 'function') {
+                                EndpointExposerConfigurationPage.loadConfigurationToUi(cfg);
+                            } else {
+                                // Fallback: call global loader if present
+                                if (typeof page !== 'undefined' && typeof page.loadConfigurationToUi === 'function') page.loadConfigurationToUi(cfg);
+                            }
+                        } catch (e) {
+                            console.warn('EE: loadConfigurationToUi failed', e);
+                        }
+
+                        // Trigger base path fetch and refresh previews if available
+                        try {
+                            const fetchFn = (window.EndpointExposerConfigurationPage && window.EndpointExposerConfigurationPage.fetchPluginBasePathOnce) || (typeof page !== 'undefined' && page.fetchPluginBasePathOnce);
+                            if (typeof fetchFn === 'function') {
+                                Promise.resolve(fetchFn()).then(() => {
+                                    document.querySelectorAll('.ee-folder').forEach(card => {
+                                        const rel = card.querySelector('input[type="text"].ee-input:nth-of-type(2)') || card.querySelector('input[type="text"].ee-input');
+                                        if (rel) rel.dispatchEvent(new Event('input', { bubbles: true }));
+                                    });
+                                }).catch(() => { });
+                            }
+                        } catch (e) { /* ignore */ }
+
+                        Dashboard.hideLoadingMsg();
+                        return;
+                    }
+
+                    if (attempts <= 0) {
+                        console.debug('EE: factory not available after retries; rendering minimal UI');
+                        try {
+                            if (typeof EndpointExposerConfigurationPage.loadConfigurationToUi === 'function') {
+                                EndpointExposerConfigurationPage.loadConfigurationToUi(cfg);
+                            }
+                        } catch (e) { /* ignore */ }
+                        Dashboard.hideLoadingMsg();
+                        return;
+                    }
+
+                    setTimeout(() => waitForFactoryAndRender(cfg, attempts - 1, delayMs), delayMs);
+                })(config || {});
+            })
+            .catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                console.error('Failed to load plugin configuration', err);
+                // Ensure raw area shows error for debugging
+                try {
+                    const rawEl = view.querySelector('#ee-raw');
+                    if (rawEl) rawEl.textContent = 'Failed to load configuration: ' + (err && err.message ? err.message : String(err));
+                } catch (e) { /* ignore */ }
+            });
     },
 
     saveConfiguration: function (view) {
         Dashboard.showLoadingMsg();
+        ApiClient.getPluginConfiguration(EndpointExposerConfigurationPage.pluginUniqueId)
+            .then(function (config) {
+                const get = id => view.querySelector('#' + id);
+                config.ServerBaseUrl = (get('ServerBaseUrl') && get('ServerBaseUrl').value) || null;
+                config.ApiKey = (get('ApiKey') && get('ApiKey').value) || null;
+                config.OutputDirectory = (get('OutputDirectory') && get('OutputDirectory').value) || null;
+                const maxPayloadVal = (get('MaxPayloadBytes') && get('MaxPayloadBytes').value) || '0';
+                config.MaxPayloadBytes = parseInt(maxPayloadVal, 10) || 0;
+                const maxBackupsVal = (get('MaxBackups') && get('MaxBackups').value) || '0';
+                config.MaxBackups = parseInt(maxBackupsVal, 10) || 0;
 
-        ApiClient.getPluginConfiguration(EndpointExposerConfigurationPage.pluginUniqueId).then(function (config) {
-            const get = id => view.querySelector('#' + id);
-
-            config.ServerBaseUrl = (get('ServerBaseUrl') && get('ServerBaseUrl').value) || null;
-            config.ApiKey = (get('ApiKey') && get('ApiKey').value) || null;
-            config.AllowNonAdmin = !!(get('AllowNonAdmin') && get('AllowNonAdmin').checked);
-            config.OutputDirectory = (get('OutputDirectory') && get('OutputDirectory').value) || null;
-
-            const maxPayloadVal = (get('MaxPayloadBytes') && get('MaxPayloadBytes').value) || '0';
-            config.MaxPayloadBytes = parseInt(maxPayloadVal, 10) || 0;
-
-            const maxBackupsVal = (get('MaxBackups') && get('MaxBackups').value) || '0';
-            config.MaxBackups = parseInt(maxBackupsVal, 10) || 0;
-
-            // Gather structured UI values (ExposedFolders + legacy RegisteredFiles)
-            try {
-                if (typeof EndpointExposerConfigurationPage.gatherUiToConfiguration === 'function') {
-                    config = EndpointExposerConfigurationPage.gatherUiToConfiguration(config);
-                } else {
-                    // Fallback: parse RegisteredFiles textarea
-                    try {
-                        const raw = (get('RegisteredFiles') && get('RegisteredFiles').value) || '[]';
-                        config.RegisteredFiles = JSON.parse(raw);
-                    } catch (e) {
-                        config.RegisteredFiles = [];
-                    }
-                }
-            } catch (e) {
-                Dashboard.hideLoadingMsg();
-                const statusEl = view.querySelector('#ee-status');
-                if (statusEl) statusEl.textContent = 'Validation error: ' + e.message;
-                return;
-            }
-
-            // Primary save via ApiClient (updates Jellyfin in-memory config and XML)
-            ApiClient.updatePluginConfiguration(EndpointExposerConfigurationPage.pluginUniqueId, config).then(function (result) {
-                Dashboard.processPluginConfigurationUpdateResult(result);
-
-                // Refresh UI with saved config
-                EndpointExposerConfigurationPage._currentConfig = config;
-                if (typeof EndpointExposerConfigurationPage.loadConfigurationToUi === 'function') {
-                    try { EndpointExposerConfigurationPage.loadConfigurationToUi(config); } catch (e) { /* ignore */ }
-                }
-
-                // Secondary: call controller SaveConfiguration so server-side SaveConfiguration() runs
-                // (this triggers JSON write and the folder-creation block you added).
                 try {
-                    fetch('/Plugins/EndpointExposer/SaveConfiguration', {
-                        method: 'PUT',
-                        credentials: 'same-origin',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
-                        },
-                        body: JSON.stringify(config)
-                    }).then(function (resp) {
-                        if (!resp.ok) {
-                            console.warn('Controller SaveConfiguration returned non-OK status', resp.status);
-                        } else {
-                            // optional: you can log success for debugging
-                            console.debug('Controller SaveConfiguration invoked successfully');
-                        }
-                    }).catch(function (err) {
-                        console.warn('Controller SaveConfiguration request failed', err);
-                    });
-                } catch (ex) {
-                    console.warn('Failed to invoke controller SaveConfiguration', ex);
+                    if (typeof EndpointExposerConfigurationPage.gatherUiToConfiguration === 'function') {
+                        config = EndpointExposerConfigurationPage.gatherUiToConfiguration(config);
+                    } else {
+                        config.RegisteredFiles = config.RegisteredFiles || [];
+                        config.ExposedFolders = config.ExposedFolders || [];
+                    }
+                } catch (e) {
+                    Dashboard.hideLoadingMsg();
+                    const statusEl = view.querySelector('#ee-status');
+                    if (statusEl) statusEl.textContent = 'Validation error: ' + e.message;
+                    return;
                 }
-            }).catch(function (err) {
-                console.error('Failed to save plugin configuration', err);
-            }).finally(function () {
-                Dashboard.hideLoadingMsg();
-            });
-        }).catch(function (err) {
-            Dashboard.hideLoadingMsg();
-            console.error('Failed to fetch plugin configuration before save', err);
-        });
-    },
 
+                ApiClient.updatePluginConfiguration(EndpointExposerConfigurationPage.pluginUniqueId, config)
+                    .then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                        EndpointExposerConfigurationPage._currentConfig = config;
+                        if (typeof EndpointExposerConfigurationPage.loadConfigurationToUi === 'function') {
+                            try { EndpointExposerConfigurationPage.loadConfigurationToUi(config); } catch (e) { }
+                        }
+                    })
+                    .catch(function (err) { console.error('Failed to save plugin configuration', err); })
+                    .finally(function () { Dashboard.hideLoadingMsg(); });
+            })
+            .catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                console.error('Failed to fetch plugin configuration before save', err);
+            });
+    },
 
     fetchRawConfiguration: function (view) {
         Dashboard.showLoadingMsg();
-
-        ApiClient.getPluginConfiguration(EndpointExposerConfigurationPage.pluginUniqueId).then(function (config) {
-            const rawEl = view.querySelector('#ee-raw');
-            if (rawEl) rawEl.textContent = JSON.stringify(config, null, 2);
-            Dashboard.hideLoadingMsg();
-        }).catch(function (err) {
-            Dashboard.hideLoadingMsg();
-            console.error('Failed to fetch raw configuration', err);
-        });
+        ApiClient.getPluginConfiguration(EndpointExposerConfigurationPage.pluginUniqueId)
+            .then(function (config) {
+                const rawEl = view.querySelector('#ee-raw');
+                if (rawEl) rawEl.textContent = JSON.stringify(config, null, 2);
+                Dashboard.hideLoadingMsg();
+            })
+            .catch(function (err) {
+                Dashboard.hideLoadingMsg();
+                console.error('Failed to fetch raw configuration', err);
+            });
     }
 };
 
-// Exposed Folders UI helpers (integrated into the page object)
+function getAccessToken() {
+    try {
+        const creds = localStorage.getItem('jellyfin_credentials');
+        if (!creds) return null;
+        const parsed = JSON.parse(creds);
+        const servers = parsed.Servers || [];
+        if (servers.length && servers[0].AccessToken) return servers[0].AccessToken;
+    } catch (e) { console.warn('Could not parse jellyfin_credentials', e); }
+    return null;
+}
+
+//#region IIFE
 (function (page) {
     const folderTokenRegex = /^[a-z0-9_-]+$/i;
+    let _cachedPluginBasePath = null;
 
-    function createFolderRow(entry) {
-        const tr = document.createElement('tr');
+    // helper: extract resolvedPath from various ApiClient.ajax return shapes
+    async function extractResolvedPathFromAjaxResult(result) {
+        try {
+            // If it's a Fetch Response (has json() function), try to parse it
+            if (result && typeof result === 'object' && typeof result.json === 'function') {
+                try {
+                    const parsed = await result.json();
+                    if (parsed && (parsed.resolvedPath || parsed.ResolvedPath)) return parsed.resolvedPath || parsed.ResolvedPath;
+                } catch (e) {
+                    // If json() fails, try text() and parse
+                    try {
+                        const txt = await result.text();
+                        const parsed = JSON.parse(txt);
+                        if (parsed && (parsed.resolvedPath || parsed.ResolvedPath)) return parsed.resolvedPath || parsed.ResolvedPath;
+                    } catch (e2) {
+                        console.debug('extractResolvedPathFromAjaxResult: failed to parse Fetch Response body', e, e2);
+                    }
+                }
+            }
 
-        // Name
-        const nameTd = document.createElement('td');
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.className = 'ee-input';
-        nameInput.value = entry?.Name ?? '';
-        nameTd.appendChild(nameInput);
+            // Common case: already-parsed JSON object
+            if (result && typeof result === 'object') {
+                if (result.resolvedPath || result.ResolvedPath) return result.resolvedPath || result.ResolvedPath;
 
-        // Relative Path
-        const relTd = document.createElement('td');
-        const relInput = document.createElement('input');
-        relInput.type = 'text';
-        relInput.className = 'ee-input';
-        relInput.value = entry?.RelativePath ?? '';
-        relTd.appendChild(relInput);
+                // Some clients wrap the parsed body under 'response' or 'data'
+                if (result.response && typeof result.response === 'object') {
+                    if (result.response.resolvedPath || result.response.ResolvedPath) return result.response.resolvedPath || result.response.ResolvedPath;
+                    // If response is a Fetch-like object, try its json()
+                    if (typeof result.response.json === 'function') {
+                        try {
+                            const parsed = await result.response.json();
+                            if (parsed && (parsed.resolvedPath || parsed.ResolvedPath)) return parsed.resolvedPath || parsed.ResolvedPath;
+                        } catch (e) { /* ignore */ }
+                    }
+                }
 
-        // Allow Non-Admin (use Jellyfin checkbox structure)
-        const allowTd = document.createElement('td');
-        allowTd.style.textAlign = 'center';
-        const wrapper = document.createElement('label');
-        wrapper.className = 'emby-checkbox-label';
+                if (result.data && (result.data.resolvedPath || result.data.ResolvedPath)) return result.data.resolvedPath || result.data.ResolvedPath;
+            }
 
-        const allowInput = document.createElement('input');
-        allowInput.type = 'checkbox';
-        allowInput.checked = !!entry?.AllowNonAdmin;
-        allowInput.setAttribute('is', 'emby-checkbox');
-        allowInput.classList.add('emby-checkbox');
-        allowInput.setAttribute('data-embycheckbox', 'true');
+            // If result is a string, try to parse JSON
+            if (typeof result === 'string') {
+                try {
+                    const parsed = JSON.parse(result);
+                    if (parsed && (parsed.resolvedPath || parsed.ResolvedPath)) return parsed.resolvedPath || parsed.ResolvedPath;
+                } catch (e) { /* ignore */ }
+            }
 
-        const labelSpan = document.createElement('span');
-        labelSpan.className = 'checkboxLabel';
-        labelSpan.textContent = ''; // no visible text in table cell
-
-        const outline = document.createElement('span');
-        outline.className = 'checkboxOutline';
-        outline.innerHTML = '<span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>';
-
-        wrapper.appendChild(allowInput);
-        wrapper.appendChild(labelSpan);
-        wrapper.appendChild(outline);
-        allowTd.appendChild(wrapper);
-
-        // Description
-        const descTd = document.createElement('td');
-        const descInput = document.createElement('input');
-        descInput.type = 'text';
-        descInput.className = 'ee-input';
-        descInput.value = entry?.Description ?? '';
-        descTd.appendChild(descInput);
-
-        // Actions
-        const actionsTd = document.createElement('td');
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'btn btn-small';
-        removeBtn.type = 'button';
-        removeBtn.textContent = 'Remove';
-        removeBtn.addEventListener('click', () => tr.remove());
-        actionsTd.appendChild(removeBtn);
-
-        tr.appendChild(nameTd);
-        tr.appendChild(relTd);
-        tr.appendChild(allowTd);
-        tr.appendChild(descTd);
-        tr.appendChild(actionsTd);
-
-        return tr;
-    }
-
-
-    function renderFoldersTable(entries) {
-        const tbody = document.querySelector('#ee-folders-table tbody');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        (entries || []).forEach(e => tbody.appendChild(createFolderRow(e)));
-    }
-
-    function readFoldersFromUi() {
-        const rows = Array.from(document.querySelectorAll('#ee-folders-table tbody tr'));
-        const out = [];
-        for (const r of rows) {
-            const inputs = r.querySelectorAll('input');
-            const name = (inputs[0] && inputs[0].value) ? inputs[0].value.trim() : '';
-            const rel = (inputs[1] && inputs[1].value) ? inputs[1].value.trim() : '';
-            const allow = inputs[2] ? inputs[2].checked : false;
-            const desc = (inputs[3] && inputs[3].value) ? inputs[3].value.trim() : '';
-            out.push({ Name: name, RelativePath: rel, AllowNonAdmin: allow, Description: desc });
+            return null;
+        } catch (e) {
+            console.debug('extractResolvedPathFromAjaxResult error', e, result);
+            return null;
         }
-        return out;
     }
 
-    function validateFolders(entries) {
-        for (const e of entries) {
-            if (!e.Name || !folderTokenRegex.test(e.Name)) return `Invalid folder Name: "${e.Name}"`;
-            if (!e.RelativePath || !folderTokenRegex.test(e.RelativePath)) return `Invalid RelativePath for "${e.Name}": "${e.RelativePath}"`;
+    // Prefill ServerBaseUrl from jellyfin_credentials for better UX (client-side only)
+    (function prefillServerBaseFromLocalStorage() {
+        try {
+            const raw = localStorage.getItem('jellyfin_credentials');
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            const servers = parsed?.Servers;
+            if (!Array.isArray(servers) || !servers.length) return;
+            const s = servers[0];
+            // Prefer ManualAddress then LocalAddress
+            const candidate = (s?.ManualAddress || s?.LocalAddress || '').trim();
+            if (!candidate) return;
+
+            // Only set the input if the user hasn't already configured a ServerBaseUrl
+            const input = document.querySelector('#ServerBaseUrl');
+            if (input && !input.value) {
+                // sanitize: remove trailing slash
+                input.value = candidate.replace(/\/+$/, '');
+            }
+
+            // Also set ApiClient._serverInfo fallback if ApiClient supports it (optional)
+            if (window.ApiClient && ApiClient._serverInfo && !ApiClient._serverInfo.BaseUrl) {
+                ApiClient._serverInfo.BaseUrl = candidate.replace(/\/+$/, '');
+            }
+        } catch (e) {
+            console.debug('prefillServerBaseFromLocalStorage: failed', e);
         }
-        // ensure no duplicate Names or RelativePaths
-        const names = new Set();
-        const rels = new Set();
-        for (const e of entries) {
-            const n = e.Name.toLowerCase();
-            const r = e.RelativePath.toLowerCase();
-            if (names.has(n)) return `Duplicate folder Name: "${e.Name}"`;
-            if (rels.has(r)) return `Duplicate RelativePath: "${e.RelativePath}"`;
-            names.add(n);
-            rels.add(r);
+    })();
+
+    // Client helper: prefer jellyfin_credentials ManualAddress/LocalAddress, fallback to window.location
+    function getClientBaseUrl() {
+        try {
+            const raw = localStorage.getItem('jellyfin_credentials');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                const servers = parsed?.Servers;
+                if (Array.isArray(servers) && servers.length) {
+                    const s = servers[0];
+                    const candidate = (s?.ManualAddress || s?.LocalAddress || '').trim();
+                    if (candidate) return normalizeBase(candidate);
+                }
+            }
+        } catch (e) {
+            console.debug('getClientBaseUrl: failed to read jellyfin_credentials', e);
+        }
+
+        // Fallback to the page origin (preserves scheme + host + port)
+        if (window && window.location && window.location.origin) return normalizeBase(window.location.origin);
+
+        return 'http://<host>';
+    }
+
+    function normalizeBase(u) {
+        try {
+            // If it's already a full URL, new URL() will parse it and preserve any path (virtual dir)
+            const parsed = new URL(u, window.location.origin);
+            // Remove trailing slash
+            return parsed.origin + parsed.pathname.replace(/\/+$/, '');
+        } catch (e) {
+            // If parsing fails, fallback to raw trimmed string without trailing slash
+            return (u || '').replace(/\/+$/, '');
+        }
+    }
+
+    // Try ResolvePath with retries (client-side resilience)
+    async function tryResolvePath(relative, attempts = 3, delayMs = 350) {
+        const token = getAccessToken() || (ApiClient && ApiClient._serverInfo && ApiClient._serverInfo.AccessToken) || null;
+        const url = ApiClient.getUrl('Plugins/EndpointExposer/ResolvePath') + '?relative=' + encodeURIComponent(relative);
+
+        for (let i = 0; i < attempts; i++) {
+            try {
+                const result = await ApiClient.ajax({ url: url, type: 'GET', headers: token ? { 'X-Emby-Token': token } : {} });
+                const resolved = await extractResolvedPathFromAjaxResult(result);
+                if (resolved) return resolved;
+                // If no resolved path, treat as transient and retry
+            } catch (e) {
+                console.debug('tryResolvePath attempt failed', i + 1, e);
+            }
+            // small backoff
+            await new Promise(r => setTimeout(r, delayMs * (i + 1)));
         }
         return null;
     }
 
-    // Hook up Add / Import buttons (delegated)
-    document.addEventListener('click', (ev) => {
-        if (!ev.target) return;
-        if (ev.target.id === 'ee-add-folder') {
-            ev.preventDefault();
-            const tbody = document.querySelector('#ee-folders-table tbody');
-            if (tbody) tbody.appendChild(createFolderRow({ Name: '', RelativePath: '', AllowNonAdmin: false, Description: '' }));
+    const fetchPluginBasePathOnce = async function fetchPluginBasePathOnce() {
+        if (_cachedPluginBasePath !== null) return _cachedPluginBasePath;
+        try {
+            const token = getAccessToken();
+            const url = ApiClient.getUrl('Plugins/EndpointExposer/DataBasePath');
+            const res = await ApiClient.ajax({ url: url, type: 'GET', headers: token ? { 'X-Emby-Token': token } : {} });
+            _cachedPluginBasePath = (res && (res.basePath || res.basepath)) ? (res.basePath || res.basepath) : null;
+        } catch (e) {
+            _cachedPluginBasePath = null;
+            console.debug('fetchPluginBasePathOnce failed', e);
         }
-        if (ev.target.id === 'ee-import-folders') {
-            ev.preventDefault();
-            const raw = prompt('Paste JSON array of FolderEntry objects (Name, RelativePath, AllowNonAdmin, Description):');
-            if (!raw) return;
+        return _cachedPluginBasePath;
+    };
+
+    // Attach to page object for external access
+    page.fetchPluginBasePathOnce = fetchPluginBasePathOnce;
+
+    function createFolderCard(entry) {
+        const card = document.createElement('div');
+        card.className = 'ee-folder';
+
+        // Name Row (with Remove button on the right)
+        const nameRow = document.createElement('div');
+        nameRow.className = 'ee-row';
+        nameRow.style.justifyContent = 'space-between';
+        nameRow.style.alignItems = 'center';
+
+        const nameLeftDiv = document.createElement('div');
+        nameLeftDiv.style.display = 'flex';
+        nameLeftDiv.style.gap = '12px';
+        nameLeftDiv.style.flex = '1';
+        nameLeftDiv.style.alignItems = 'center';
+
+        const nameLabel = document.createElement('label');
+        nameLabel.textContent = 'Name';
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'ee-input';
+        nameInput.value = entry?.Name ?? '';
+        nameInput.placeholder = 'token (a-z0-9_-)';
+        nameInput.style.flex = '1';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'btn';
+        removeBtn.type = 'button';
+        removeBtn.textContent = 'Remove';
+        removeBtn.style.whiteSpace = 'nowrap';
+
+        nameLeftDiv.appendChild(nameLabel);
+        nameLeftDiv.appendChild(nameInput);
+        nameRow.appendChild(nameLeftDiv);
+        nameRow.appendChild(removeBtn);
+        card.appendChild(nameRow);
+
+        // Relative Path
+        const relRow = document.createElement('div');
+        relRow.className = 'ee-row';
+        const relLabel = document.createElement('label');
+        relLabel.textContent = 'Relative Path';
+        const relInput = document.createElement('input');
+        relInput.type = 'text';
+        relInput.className = 'ee-input';
+        relInput.value = entry?.RelativePath ?? '';
+        relInput.placeholder = 'relative folder token';
+        relInput.style.flex = '1';
+        relRow.appendChild(relLabel);
+        relRow.appendChild(relInput);
+        card.appendChild(relRow);
+
+        // Description
+        const descRow = document.createElement('div');
+        descRow.className = 'ee-row';
+        const descLabel = document.createElement('label');
+        descLabel.textContent = 'Description';
+        const descInput = document.createElement('textarea');
+        descInput.className = 'ee-input';
+        descInput.rows = 3;
+        descInput.value = entry?.Description ?? '';
+        descInput.placeholder = 'Optional description';
+        descInput.style.flex = '1';
+        descRow.appendChild(descLabel);
+        descRow.appendChild(descInput);
+        card.appendChild(descRow);
+
+        // Allow Non-Admin
+        const allowRow = document.createElement('div');
+        allowRow.className = 'ee-row';
+        allowRow.style.alignItems = 'center';
+        const allowLabel = document.createElement('label');
+        allowLabel.textContent = 'Allow Non-Admin';
+        const allowInput = document.createElement('input');
+        allowInput.type = 'checkbox';
+        allowInput.className = 'ee-checkbox';
+        allowInput.checked = !!entry?.AllowNonAdmin;
+        allowRow.appendChild(allowLabel);
+        allowRow.appendChild(allowInput);
+        card.appendChild(allowRow);
+
+        // Preview
+        const previewRow = document.createElement('div');
+        previewRow.className = 'ee-row';
+        previewRow.style.flexDirection = 'column';
+        previewRow.style.alignItems = 'flex-start';
+        previewRow.style.gap = '6px';
+        const previewCol = document.createElement('div');
+        previewCol.className = 'previews';
+        const resolvedLine = document.createElement('div');
+        resolvedLine.className = 'ee-resolved-path';
+        resolvedLine.textContent = 'Resolved path: [resolving...]';
+        resolvedLine.style.width = '100%';
+        const exampleLine = document.createElement('div');
+        exampleLine.className = 'ee-example-url';
+        exampleLine.textContent = 'Example POST URL: [generating...]';
+        exampleLine.style.width = '100%';
+        previewCol.appendChild(resolvedLine);
+        previewCol.appendChild(exampleLine);
+        previewRow.appendChild(previewCol);
+        card.appendChild(previewRow);
+
+        // Create row
+        const createRow = document.createElement('div');
+        createRow.className = 'ee-row';
+        createRow.style.alignItems = 'center';
+        createRow.style.justifyContent = 'space-between';
+        const createBtnDiv = document.createElement('div');
+        createBtnDiv.style.display = 'flex';
+        createBtnDiv.style.gap = '12px';
+        createBtnDiv.style.alignItems = 'center';
+        const createBtn = document.createElement('button');
+        createBtn.className = 'btn';
+        createBtn.type = 'button';
+        createBtn.textContent = 'Create folder on server';
+        const createStatus = document.createElement('span');
+        createStatus.style.marginLeft = '8px';
+        createStatus.style.color = 'var(--secondaryText)';
+        createStatus.style.fontSize = '0.9em';
+        createBtnDiv.appendChild(createBtn);
+        createBtnDiv.appendChild(createStatus);
+        createRow.appendChild(createBtnDiv);
+        createRow.appendChild(removeBtn);
+        card.appendChild(createRow);
+
+        // #region setPreviewText
+        function setPreviewText(el, labelText, pathOnly) {
+            el.textContent = labelText;
+            el.setAttribute('data-path', pathOnly || '');
+            el.setAttribute('title', pathOnly || labelText);
+        }
+
+        // Initialize preview with fallback (no undefined variable)
+        setPreviewText(resolvedLine, 'Resolved path: ' + buildPreviewPath(''), buildPreviewPath(''));
+
+        // Click-to-copy: copy only the raw path (data-path), fall back to visible text if missing
+        resolvedLine.addEventListener('click', () => {
             try {
-                const parsed = JSON.parse(raw);
-                if (!Array.isArray(parsed)) throw new Error('Not an array');
-                renderFoldersTable(parsed);
-            } catch (ex) {
-                alert('Invalid JSON: ' + ex.message);
+                const raw = resolvedLine.getAttribute('data-path') || resolvedLine.textContent || '';
+                navigator.clipboard.writeText(raw);
+                const prev = resolvedLine.textContent;
+                resolvedLine.textContent = 'Copied to clipboard';
+                setTimeout(() => setPreviewText(resolvedLine, prev, raw), 900);
+            } catch (e) { /* ignore */ }
+        });
+
+        // #endregion  setPreviewText
+        function debounce(fn, wait) { let t = null; return function (...args) { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); }; }
+
+        function buildPreviewPath(rel) {
+            rel = (rel || '<relative-path>').replace(/^[\\/]+|[\\/]+$/g, '');
+            if (_cachedPluginBasePath) return _cachedPluginBasePath.replace(/[\\/]+$/, '') + '/' + rel;
+            const pluginName = 'Jellyfin.Plugin.EndpointExposer';
+            const win = `C:\\Users\\<user>\\AppData\\Local\\jellyfin\\plugins\\configurations\\${pluginName}\\data\\${rel}`;
+            const nix = `/var/lib/jellyfin/plugins/configurations/${pluginName}/data/${rel}`;
+            return `${win}  (Windows)  —  ${nix}  (Linux)`;
+        }
+
+        //#region updatePreviews
+        async function updatePreviews() {
+            const nameVal = (nameInput.value || '<name>').trim();
+            const relVal = (relInput.value || '').trim();
+            const origin = getClientBaseUrl();
+            exampleLine.textContent = 'Example POST URL: ' + origin + '/Plugins/EndpointExposer/write/' + encodeURIComponent(nameVal) + '/file.json';
+
+            if (!relVal) {
+                setPreviewText(resolvedLine, 'Resolved path: ' + buildPreviewPath(''), buildPreviewPath(''));
+                return;
+            }
+
+            // If we already have the authoritative base path, show it immediately and skip ResolvePath
+            if (_cachedPluginBasePath) {
+                setPreviewText(resolvedLine, 'Resolved path: ' + (_cachedPluginBasePath.replace(/[\\/]+$/, '') + '/' + relVal), (_cachedPluginBasePath.replace(/[\\/]+$/, '') + '/' + relVal));
+                return;
+            }
+
+            // Otherwise show an optimistic resolving state and call ResolvePath
+            setPreviewText(resolvedLine, 'Resolved path: [resolving...]', '');
+
+            try {
+                const resolved = await tryResolvePath(relVal);
+                if (resolved) {
+                    setPreviewText(resolvedLine, 'Resolved path: ' + resolved, resolved);
+                } else {
+                    const p = buildPreviewPath(relVal);
+                    setPreviewText(resolvedLine, 'Resolved path: ' + p, p);
+                }
+            } catch (e) {
+                console.debug('ResolvePath failed (updatePreviews)', e);
+                const p = buildPreviewPath(relVal);
+                setPreviewText(resolvedLine, 'Resolved path: ' + p, p);
             }
         }
-    });
 
-    // Expose functions on the page object so existing handlers can call them
+        const debouncedUpdate = debounce(updatePreviews, 250);
+        nameInput.addEventListener('input', debouncedUpdate);
+        relInput.addEventListener('input', debouncedUpdate);
+
+        // Fetch base path (non-blocking) and refresh preview when ready
+        fetchPluginBasePathOnce().then(() => { updatePreviews(); }).catch(() => { });
+
+        // Show fallback immediately
+        updatePreviews();
+
+        // Create folder handler (auto-save then CreateFolder)
+        createBtn.addEventListener('click', async () => {
+            const relVal = (relInput.value || '').trim();
+            if (!relVal) { createStatus.textContent = 'Relative path required'; return; }
+            createStatus.textContent = 'Saving configuration...'; createBtn.disabled = true;
+            try {
+                const pluginId = EndpointExposerConfigurationPage.pluginUniqueId;
+                const cfg = await ApiClient.getPluginConfiguration(pluginId);
+                cfg.ExposedFolders = cfg.ExposedFolders || [];
+                const logicalName = (nameInput.value || relVal).trim();
+                const existingIndex = cfg.ExposedFolders.findIndex(f =>
+                    (f.Name && f.Name.toLowerCase() === logicalName.toLowerCase()) ||
+                    (f.RelativePath && f.RelativePath.toLowerCase() === relVal.toLowerCase())
+                );
+                const folderObj = { Name: logicalName, RelativePath: relVal, AllowNonAdmin: !!allowInput.checked, Description: descInput.value ? descInput.value.trim() : '' };
+                if (existingIndex >= 0) cfg.ExposedFolders[existingIndex] = Object.assign(cfg.ExposedFolders[existingIndex], folderObj);
+                else cfg.ExposedFolders.push(folderObj);
+                await ApiClient.updatePluginConfiguration(pluginId, cfg);
+                createStatus.textContent = 'Configuration saved. Creating folder...';
+                const token = getAccessToken();
+                const createResult = await ApiClient.ajax({
+                    url: ApiClient.getUrl('Plugins/EndpointExposer/CreateFolder'),
+                    type: 'POST',
+                    data: JSON.stringify({ RelativePath: relVal }),
+                    contentType: 'application/json',
+                    headers: token ? { 'X-Emby-Token': token } : {}
+                });
+                const resolvedPath = (createResult && (createResult.resolvedPath || createResult.ResolvedPath)) ? (createResult.resolvedPath || createResult.ResolvedPath) : null;
+                createStatus.textContent = 'Created: ' + (resolvedPath || relVal);
+                setPreviewText(resolvedLine, 'Resolved path: ' + (resolvedPath || buildPreviewPath(relVal)), (resolvedPath || buildPreviewPath(relVal)));
+
+            } catch (err) {
+                console.error('CreateFolder flow failed', err);
+                let msg = 'request failed';
+                try { if (err && err.message) msg = err.message; else if (err && err.response && err.response.statusText) msg = err.response.statusText; } catch (e) { }
+                createStatus.textContent = 'Error: ' + msg;
+            } finally { createBtn.disabled = false; }
+        });
+
+        // Remove handler
+        removeBtn.addEventListener('click', () => {
+            const list = document.getElementById('ee-folders-list');
+            if (list && card.parentNode) list.removeChild(card);
+        });
+
+        // ResolvePath on blur (single server validation)
+        relInput.addEventListener('blur', async () => {
+            const relVal = (relInput.value || '').trim();
+            if (!relVal) return;
+
+            try {
+                const resolved = await tryResolvePath(relVal);
+                if (resolved) {
+                    setPreviewText(resolvedLine, 'Resolved path: ' + resolved, resolved);
+                    return;
+                }
+            } catch (e) {
+                console.debug('ResolvePath failed (blur)', e);
+            }
+
+            // fallback to cached base path or local guess
+            if (_cachedPluginBasePath) {
+                setPreviewText(resolvedLine, 'Resolved path: ' + (_cachedPluginBasePath.replace(/[\\/]+$/, '') + '/' + relVal), (_cachedPluginBasePath.replace(/[\\/]+$/, '') + '/' + relVal));
+            } else {
+                const p = buildPreviewPath(relVal);
+                setPreviewText(resolvedLine, 'Resolved path: ' + p, p);
+            }
+        });
+
+        return {
+            element: card,
+            appendTo: function (container) { container.appendChild(card); },
+            getData: function () {
+                return { Name: nameInput.value.trim(), RelativePath: relInput.value.trim(), AllowNonAdmin: allowInput.checked, Description: descInput.value.trim() };
+            }
+        };
+    }
+    //#endregion updatePreviews
+
+    page.createFolderCard = createFolderCard;
+
+    //#endregion IIFE
+
+    function renderFoldersList(entries) {
+        const list = document.getElementById('ee-folders-list');
+        if (!list) return;
+        list.innerHTML = '';
+        (entries || []).forEach(e => { const card = createFolderCard(e); if (card && typeof card.appendTo === 'function') card.appendTo(list); });
+    }
+
+    function readFoldersFromUi() {
+        const list = document.getElementById('ee-folders-list');
+        const out = [];
+        if (!list) return out;
+        const cards = Array.from(list.querySelectorAll('.ee-folder'));
+        for (const c of cards) {
+            const nameInput = c.querySelector('input[type="text"].ee-input');
+            const relInput = c.querySelector('input[type="text"].ee-input:nth-of-type(2)') || c.querySelector('input[type="text"].ee-input');
+            const descInput = c.querySelector('textarea.ee-input') || c.querySelector('input[type="text"].ee-input[placeholder="Optional description"]');
+            const allowInput = c.querySelector('input[type="checkbox"], input.ee-checkbox');
+            out.push({
+                Name: nameInput ? nameInput.value.trim() : '',
+                RelativePath: relInput ? relInput.value.trim() : '',
+                AllowNonAdmin: allowInput ? allowInput.checked : false,
+                Description: descInput ? descInput.value.trim() : ''
+            });
+        }
+        return out;
+    }
+
     page.loadConfigurationToUi = function (config) {
-        // populate ExposedFolders
-        renderFoldersTable(config?.ExposedFolders || []);
-        // populate legacy RegisteredFiles textarea if present
-        const rf = document.getElementById('ee-registered-files');
-        if (rf) rf.value = JSON.stringify(config?.RegisteredFiles || [], null, 2);
-        // populate raw view
+        renderFoldersList(config?.ExposedFolders || []);
         const raw = document.getElementById('ee-raw');
         if (raw) raw.textContent = JSON.stringify(config || {}, null, 2);
     };
 
     page.gatherUiToConfiguration = function (baseConfig) {
         const cfg = baseConfig || {};
-        // read ExposedFolders
         const folders = readFoldersFromUi();
-        const err = validateFolders(folders);
-        if (err) throw new Error(err);
-        cfg.ExposedFolders = folders;
-
-        // read RegisteredFiles textarea (legacy) and validate JSON
-        const rf = document.getElementById('ee-registered-files');
-        if (rf) {
-            const txt = rf.value.trim();
-            if (txt) {
-                try {
-                    cfg.RegisteredFiles = JSON.parse(txt);
-                } catch (ex) {
-                    throw new Error('RegisteredFiles JSON is invalid: ' + ex.message);
-                }
-            } else {
-                cfg.RegisteredFiles = [];
-            }
+        for (const f of folders) {
+            if (!f.Name || !folderTokenRegex.test(f.Name)) throw new Error('Invalid folder Name: "' + f.Name + '"');
+            if (!f.RelativePath || !folderTokenRegex.test(f.RelativePath)) throw new Error('Invalid RelativePath for "' + f.Name + '": "' + f.RelativePath + '"');
         }
-
+        const names = new Set(); const rels = new Set();
+        for (const f of folders) {
+            const n = f.Name.toLowerCase(); const r = f.RelativePath.toLowerCase();
+            if (names.has(n)) throw new Error('Duplicate folder Name: "' + f.Name + '"');
+            if (rels.has(r)) throw new Error('Duplicate RelativePath: "' + f.RelativePath + '"');
+            names.add(n); rels.add(r);
+        }
+        cfg.ExposedFolders = folders; cfg.RegisteredFiles = cfg.RegisteredFiles || [];
         return cfg;
     };
 
-    // UI polish: ensure folder row inputs use emby-input and wire details toggle
     (function () {
         function applyEmbyInputs() {
-            const rows = document.querySelectorAll('#ee-folders-table tbody tr');
-            rows.forEach(r => {
-                // Text inputs -> emby-input
-                const inputs = r.querySelectorAll('input[type="text"], input[type="number"]');
-                inputs.forEach(i => {
-                    if (!i.hasAttribute('is')) i.setAttribute('is', 'emby-input');
-                    i.classList.add('emby-input');
-                });
-
-                // Textareas -> emby-textarea
-                const textareas = r.querySelectorAll('textarea');
-                textareas.forEach(t => {
-                    if (!t.hasAttribute('is')) t.setAttribute('is', 'emby-textarea');
-                    t.classList.add('emby-input');
-                });
-
-                // Checkboxes -> ensure proper wrapper and attributes (idempotent)
-                const checkboxes = r.querySelectorAll('input[type="checkbox"]');
-                checkboxes.forEach(c => {
-                    // mark as emby checkbox
-                    if (!c.hasAttribute('is')) c.setAttribute('is', 'emby-checkbox');
-                    c.classList.add('emby-checkbox');
-                    if (!c.hasAttribute('data-embycheckbox')) c.setAttribute('data-embycheckbox', 'true');
-
-                    // ensure wrapper exists
-                    if (!c.closest('label.emby-checkbox-label')) {
-                        const wrapper = document.createElement('label');
-                        wrapper.className = 'emby-checkbox-label';
-
-                        // move checkbox into wrapper
-                        c.parentNode.insertBefore(wrapper, c);
-                        wrapper.appendChild(c);
-
-                        // visible label (empty)
-                        const labelSpan = document.createElement('span');
-                        labelSpan.className = 'checkboxLabel';
-                        wrapper.appendChild(labelSpan);
-
-                        // outline/icons
-                        const outline = document.createElement('span');
-                        outline.className = 'checkboxOutline';
-                        outline.innerHTML = '<span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span><span class="material-icons checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>';
-                        wrapper.appendChild(outline);
-                    }
-                });
+            const inputs = document.querySelectorAll('.ee-folder input[type="text"], .ee-folder input[type="checkbox"], .ee-folder textarea');
+            inputs.forEach(i => {
+                if (!i.hasAttribute('is') && i.type === 'text') i.setAttribute('is', 'emby-input');
+                if (!i.hasAttribute('is') && i.type === 'checkbox') i.setAttribute('is', 'emby-checkbox');
+                i.classList.add('emby-input');
+                if (i.type === 'checkbox' && !i.hasAttribute('data-embycheckbox')) i.setAttribute('data-embycheckbox', 'true');
             });
-
-            // Try to trigger Jellyfin's element upgrade/init so custom controls render immediately
             try {
                 if (window.Emby && Emby.Elements && typeof Emby.Elements.upgrade === 'function') {
-                    Emby.Elements.upgrade(document.querySelectorAll('input[is="emby-checkbox"], input[is="emby-input"], textarea[is="emby-textarea"]'));
-                } else if (window.Emby && Emby.Controls && typeof Emby.Controls.init === 'function') {
-                    Emby.Controls.init();
+                    Emby.Elements.upgrade();
                 }
-            } catch (e) {
-                // non-fatal; host may not expose these helpers in all builds
-                console.debug('Emby upgrade/init not available', e);
+            } catch (e) { /* ignore */ }
+        }
+
+        // Wire detected base UI (requires the HTML snippet to be present)
+        (function wireDetectedBaseUi() {
+            const valEl = document.getElementById('ee-detected-base-value');
+            const useBtn = document.getElementById('ee-use-detected');
+            const testBtn = document.getElementById('ee-test-base');
+            const testRes = document.getElementById('ee-test-result');
+            const input = document.getElementById('ServerBaseUrl');
+
+            const detected = getClientBaseUrl();
+            if (valEl) valEl.textContent = detected;
+
+            if (useBtn && input) {
+                useBtn.addEventListener('click', () => { input.value = detected; input.dispatchEvent(new Event('input')); });
             }
-        }
 
-        const tbody = document.querySelector('#ee-folders-table tbody');
-        if (tbody) {
-            const observer = new MutationObserver((mutations) => {
-                for (const m of mutations) {
-                    if (m.type === 'childList' && m.addedNodes.length) applyEmbyInputs();
-                }
-            });
-            observer.observe(tbody, { childList: true, subtree: false });
-        }
+            if (testBtn) {
+                testBtn.addEventListener('click', async () => {
+                    if (testRes) testRes.textContent = 'Testing...';
+                    try {
+                        const token = getAccessToken();
+                        const url = ApiClient.getUrl('Plugins/EndpointExposer/DataBasePath');
+                        const res = await ApiClient.ajax({ url: url, type: 'GET', headers: token ? { 'X-Emby-Token': token } : {} });
+                        if (testRes) testRes.textContent = res ? 'Reachable / JSON OK' : 'No JSON response';
+                    } catch (e) {
+                        if (testRes) testRes.textContent = 'Failed: ' + (e && e.message ? e.message : 'network/error');
+                    }
+                    setTimeout(() => { if (testRes) testRes.textContent = ''; }, 3000);
+                });
+            }
+        })();
 
-        document.addEventListener('DOMContentLoaded', applyEmbyInputs);
-        document.addEventListener('viewshow', applyEmbyInputs);
-
-        document.querySelectorAll('details').forEach(d => {
-            d.addEventListener('toggle', () => {
-                if (d.open) d.classList.add('open'); else d.classList.remove('open');
-            });
+        // Attach handlers for page-level controls
+        document.getElementById('ee-add-folder')?.addEventListener('click', () => {
+            const list = document.getElementById('ee-folders-list');
+            if (!list) return;
+            const card = createFolderCard({});
+            if (card && typeof card.appendTo === 'function') card.appendTo(list);
+            applyEmbyInputs();
         });
 
-        window.EndpointExposerUiHelpers = window.EndpointExposerUiHelpers || {};
-        window.EndpointExposerUiHelpers.setRawConfig = function (jsonText) {
-            const el = document.getElementById('ee-raw');
-            if (el) el.textContent = jsonText;
-        };
+        document.getElementById('ee-load')?.addEventListener('click', () => {
+            EndpointExposerConfigurationPage.loadConfiguration(document.getElementById('endpointExposerConfigurationPage'));
+        });
+
+        document.getElementById('ee-fetch')?.addEventListener('click', () => {
+            EndpointExposerConfigurationPage.fetchRawConfiguration(document.getElementById('endpointExposerConfigurationPage'));
+        });
+
+        document.getElementById('ee-save')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            EndpointExposerConfigurationPage.saveConfiguration(document.getElementById('endpointExposerConfigurationPage'));
+        });
+
+        // initial load
+        EndpointExposerConfigurationPage.loadConfiguration(document.getElementById('endpointExposerConfigurationPage'));
     })();
 
-
 })(EndpointExposerConfigurationPage);
-
-// Export default initializer called by Jellyfin when the controller is injected.
-export default function (view) {
-    if (!view) return;
-
-    // Load config when the view is shown
-    view.addEventListener('viewshow', function () {
-        EndpointExposerConfigurationPage.loadConfiguration(view);
-    });
-
-    // Form submit
-    const form = view.querySelector('#ee-config-form');
-    if (form) {
-        form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            EndpointExposerConfigurationPage.saveConfiguration(view);
-        });
-    }
-
-    // Buttons
-    const loadBtn = view.querySelector('#ee-load');
-    if (loadBtn) {
-        loadBtn.addEventListener('click', function () {
-            EndpointExposerConfigurationPage.loadConfiguration(view);
-        });
-    }
-
-    const fetchBtn = view.querySelector('#ee-fetch');
-    if (fetchBtn) {
-        fetchBtn.addEventListener('click', function () {
-            EndpointExposerConfigurationPage.fetchRawConfiguration(view);
-        });
-    }
-}
+// END - Configuration/settings.js

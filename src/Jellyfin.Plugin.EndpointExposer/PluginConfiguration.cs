@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.EndpointExposer
     public class PluginConfiguration : BasePluginConfiguration
     {
         // explicit server base URL for token validation (e.g. "http://yourhost:8096")
-        public string ServerBaseUrl { get; set; }
+        public string? ServerBaseUrl { get; set; }
 
         /// <summary>
         /// Optional explicit output directory. If empty, controller will use app data path.
@@ -29,9 +29,9 @@ namespace Jellyfin.Plugin.EndpointExposer
         public int MaxPayloadBytes { get; set; } = 2 * 1024 * 1024;
 
         /// <summary>
-        /// Maximum Backups. Default 5.
+        /// Maximum Backups. Default 3.
         /// </summary>
-        public int MaxBackups { get; set; } = 5;
+        public int MaxBackups { get; set; } = 3;
 
         /// <summary>
         /// Optional list of registered logical files exposed by the plugin.
@@ -51,8 +51,8 @@ namespace Jellyfin.Plugin.EndpointExposer
         public List<string> PublicReads { get; set; } = new List<string>();
 
         /// <summary>
-        /// Listen prefix used by the optional HttpListener service (if you use it).
-        /// Example: "http://localhost:5001/".
+        /// Listen prefix used by the optional HttpListener service (if used).
+        /// Example: "http://localhost:8096/".
         /// </summary>
         public string ListenPrefix { get; set; } = "http://localhost:8096/";
 
@@ -86,8 +86,9 @@ namespace Jellyfin.Plugin.EndpointExposer
         public bool AllowNonAdmin { get; set; } = false;
 
         /// <summary>
-        /// Optional human description shown in the UI.
+        /// Optional description shown in the UI.
         /// </summary>
         public string? Description { get; set; }
     }
 }
+// END - src/Jellyfin.Plugin.EndpointExposer/PluginConfiguration.cs

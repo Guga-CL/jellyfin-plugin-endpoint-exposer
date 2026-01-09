@@ -30,3 +30,4 @@ namespace Jellyfin.Plugin.EndpointExposer
         }
     }
 }
+// END - PluginPages.cs

@@ -3,6 +3,7 @@ using System;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using Microsoft.Extensions.Logging;
 
@@ -11,87 +12,105 @@ namespace Jellyfin.Plugin.EndpointExposer
     public class JellyfinAuth
     {
         private readonly HttpClient _http;
-        private readonly ILogger<JellyfinAuth>? _logger;
+        private readonly ILogger? _logger;
+        private readonly string _baseCandidate;
 
         // Exposed so callers can log or inspect the configured base
         public string BaseUrl { get; private set; }
 
-        public JellyfinAuth(string serverBaseUrl, HttpClient? http = null, ILogger<JellyfinAuth>? logger = null)
+        public JellyfinAuth(string baseCandidate, HttpClient httpClient, ILogger? logger)
         {
-            BaseUrl = serverBaseUrl?.TrimEnd('/') ?? throw new ArgumentNullException(nameof(serverBaseUrl));
-            _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            _baseCandidate = baseCandidate?.TrimEnd('/') ?? string.Empty;
+            BaseUrl = _baseCandidate;
+            _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _logger = logger;
         }
+
 
         /// <summary>
         /// Validate a token against the configured base URL or an optional overrideBase.
         /// Returns a JObject representing the user on success, or null on failure.
         /// Throws HttpRequestException on network-level failures.
         /// </summary>
-        public async Task<JObject?> GetUserFromTokenAsync(string token, string? overrideBase = null)
+        public async Task<JObject?> GetUserFromTokenAsync(string token, string baseCandidate)
         {
-            if (string.IsNullOrWhiteSpace(token)) return null;
+            if (string.IsNullOrWhiteSpace(baseCandidate))
+                return null;
 
-            var baseUrl = (overrideBase ?? BaseUrl).TrimEnd('/');
+            // Build candidate list (start with the authoritative candidate)
+            var candidates = new List<string> { baseCandidate.TrimEnd('/') };
 
-            // First attempt: Users/Me with token in header and Bearer
+            // Optional fallback: if candidate has no path segment, try a common virtual path
             try
             {
-                var req = new HttpRequestMessage(HttpMethod.Get, $"{baseUrl}/Users/Me");
-                req.Headers.Add("X-Emby-Token", token);
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-                var res = await _http.SendAsync(req).ConfigureAwait(false);
-                var body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-                if (res.IsSuccessStatusCode)
+                var uri = new Uri(candidates[0]);
+                if (string.IsNullOrEmpty(uri.AbsolutePath) || uri.AbsolutePath == "/")
                 {
-                    _logger?.LogDebug("JellyfinAuth: token validated via Users/Me at {Base}", baseUrl);
-                    return JObject.Parse(body);
+                    candidates.Add(candidates[0].TrimEnd('/') + "/jellyfin");
+                }
+            }
+            catch
+            {
+                // ignore URI parse errors; we'll still try the raw candidate
+            }
+
+            foreach (var candidate in candidates)
+            {
+                var usersMeUrl = new Uri(new Uri(candidate + "/"), "Users/Me").ToString();
+
+                var req = new HttpRequestMessage(HttpMethod.Get, usersMeUrl);
+                req.Headers.Accept.Clear();
+                req.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+                if (!string.IsNullOrWhiteSpace(token))
+                {
+                    req.Headers.Add("X-Emby-Token", token);
                 }
 
-                _logger?.LogDebug("JellyfinAuth: Users/Me returned {Status} for base {Base}", (int)res.StatusCode, baseUrl);
-            }
-            catch (HttpRequestException)
-            {
-                // Bubble up network errors so callers can decide to retry with fallback
-                _logger?.LogWarning("JellyfinAuth: network error contacting Users/Me at {Base}", baseUrl);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "JellyfinAuth: unexpected error contacting Users/Me at {Base}", baseUrl);
-            }
-
-            // Second attempt: System/Info/Public with api_key query (some setups accept API key here)
-            try
-            {
-                var res2 = await _http.GetAsync($"{baseUrl}/System/Info/Public?api_key={token}").ConfigureAwait(false);
-                var body2 = await res2.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-                if (res2.IsSuccessStatusCode)
+                HttpResponseMessage resp;
+                string body = string.Empty;
+                try
                 {
-                    _logger?.LogDebug("JellyfinAuth: API key validated via System/Info/Public at {Base}", baseUrl);
-                    return JObject.FromObject(new
+                    resp = await _http.SendAsync(req).ConfigureAwait(false);
+                    body = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogDebug(ex, "GetUserFromTokenAsync: request failed for {Url}", usersMeUrl);
+                    continue;
+                }
+
+                // Quick guard: HTML likely starts with '<'
+                if (!string.IsNullOrWhiteSpace(body) && body.TrimStart().StartsWith("<"))
+                {
+                    _logger?.LogDebug("GetUserFromTokenAsync: candidate {Candidate} returned HTML; skipping", candidate);
+                    _logger?.LogTrace("GetUserFromTokenAsync: raw response (truncated): {Raw}", body.Length > 2000 ? body.Substring(0, 2000) + "..." : body);
+                    continue;
+                }
+
+                // If Content-Type indicates JSON, try parse; otherwise still attempt parse defensively
+                var contentType = resp.Content.Headers.ContentType?.MediaType ?? string.Empty;
+                if (contentType.IndexOf("json", StringComparison.OrdinalIgnoreCase) >= 0 || !string.IsNullOrWhiteSpace(body))
+                {
+                    try
                     {
-                        Id = "ApiKey",
-                        Policy = new { IsAdministrator = true }
-                    });
+                        var j = JObject.Parse(body);
+                        return j;
+                    }
+                    catch (Newtonsoft.Json.JsonReaderException jex)
+                    {
+                        _logger?.LogWarning(jex, "GetUserFromTokenAsync: failed to parse JSON from {Url}", usersMeUrl);
+                        _logger?.LogDebug("GetUserFromTokenAsync: raw response (truncated): {Raw}", body.Length > 2000 ? body.Substring(0, 2000) + "..." : body);
+                        continue;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogDebug(ex, "GetUserFromTokenAsync: unexpected parse error for {Url}", usersMeUrl);
+                        continue;
+                    }
                 }
-
-                _logger?.LogDebug("JellyfinAuth: System/Info/Public returned {Status} for base {Base}", (int)res2.StatusCode, baseUrl);
-            }
-            catch (HttpRequestException)
-            {
-                _logger?.LogWarning("JellyfinAuth: network error contacting System/Info/Public at {Base}", baseUrl);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "JellyfinAuth: unexpected error contacting System/Info/Public at {Base}", baseUrl);
             }
 
-            _logger?.LogInformation("JellyfinAuth: token validation failed for base {Base}", baseUrl);
+            // Nothing worked
             return null;
         }
 
@@ -124,3 +143,4 @@ namespace Jellyfin.Plugin.EndpointExposer
         }
     }
 }
+// END - JellyfinAuth.cs

@@ -1,3 +1,4 @@
+<!-- Configuration\settings.html -->
 <div
   data-role="page"
   id="endpointExposerConfigurationPage"
@@ -87,23 +88,14 @@
           tokens must match <code>^[a-z0-9_-]+$</code>.
         </p>
 
-        <table
-          id="ee-folders-table"
-          class="ee-table"
-          style="width: 100%; margin-top: 0.5em"
-        >
-          <thead>
-            <tr>
-              <th style="width: 20%">Name</th>
-              <th style="width: 30%">Relative Path</th>
-              <th style="width: 12%">Allow Non-Admin</th>
-              <th style="width: 30%">Description</th>
-              <th style="width: 8%"></th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+        <!-- Replace the table with a simple list container -->
+        <div
+          id="ee-folders-list"
+          class="ee-folders-list"
+          style="margin-top: 0.5em"
+        ></div>
 
+        <!-- Controls: single instance only -->
         <div
           class="ee-controls"
           style="margin-top: 0.75em; display: flex; gap: 0.5em"
@@ -116,68 +108,9 @@
           >
             <span>Add Folder</span>
           </button>
-          <button
-            id="ee-import-folders"
-            is="emby-button"
-            type="button"
-            class="raised emby-button"
-          >
-            <span>Import from JSON</span>
-          </button>
         </div>
       </div>
 
-      <!-- Registered Files (legacy) — collapsible -->
-      <details
-        class="verticalSection"
-        id="ee-registered-files-details"
-        style="
-          background-color: rgba(255, 255, 255, 0.02);
-          border-radius: 8px;
-          margin-bottom: 1em;
-        "
-      >
-        <summary
-          style="
-            cursor: pointer;
-            list-style: none;
-            display: flex;
-            align-items: center;
-            padding: 0.75em 1em;
-          "
-        >
-          <i
-            class="material-icons arrow-icon"
-            aria-hidden="true"
-            style="
-              transition: transform 0.18s ease-in-out;
-              transform: rotate(0deg);
-            "
-            >arrow_right</i
-          >
-          <h3 class="sectionTitle" style="margin: 0 0 0 0.5em">
-            Registered Files (legacy)
-          </h3>
-        </summary>
-
-        <div
-          style="padding: 1em; border-top: 1px solid rgba(255, 255, 255, 0.04)"
-        >
-          <p class="muted">
-            Optional JSON array of file entries. Use the structured Exposed
-            Folders UI for new setups.
-          </p>
-          <textarea
-            id="ee-registered-files"
-            is="emby-textarea"
-            class="emby-input"
-            rows="6"
-            style="width: 100%"
-          ></textarea>
-        </div>
-      </details>
-
-      <!-- Raw configuration (read-only) — collapsible -->
       <details
         class="verticalSection"
         id="ee-raw-details"
@@ -227,17 +160,6 @@
         </div>
       </details>
 
-      <label class="checkboxContainer checkboxContainer-withDescription">
-        <input
-          id="AllowNonAdmin"
-          type="checkbox"
-          is="emby-checkbox"
-          class="emby-checkbox"
-          label="Allow non-admin writes"
-        />
-        <span>Allow non-admin writes</span>
-      </label>
-
       <div style="margin-top: 1em">
         <button
           is="emby-button"
@@ -269,15 +191,44 @@
         <span id="ee-status" style="margin-left: 12px"></span>
       </div>
 
-      <div
-        id="ee-raw"
-        style="margin-top: 1em; white-space: pre-wrap; font-family: monospace"
-      ></div>
+      <details class="verticalSection" style="margin-top: 1em">
+        <summary style="cursor: pointer; display: flex; align-items: center">
+          <h3 class="sectionTitle" style="margin: 0 0 0 0.5em">
+            Help & Troubleshooting
+          </h3>
+        </summary>
+        <div
+          style="padding: 1em; border-top: 1px solid rgba(255, 255, 255, 0.04)"
+        >
+          <p>
+            <strong>Server Base URL</strong>: set the canonical public URL
+            (include virtual path) if you use a reverse proxy or need external
+            callbacks. Leave blank to let the server derive the base from
+            incoming requests.
+          </p>
+          <p>
+            <strong>Detected base</strong>: the UI shows the base your browser
+            sees. Click <em>Use detected</em> to copy it into Server Base URL.
+          </p>
+          <p>
+            <strong>Resolved path preview</strong>: the plugin asks the server
+            for the real filesystem path. If the preview fails on first create,
+            try the <em>Test</em> button or reload — the server may need a
+            moment to initialize.
+          </p>
+          <p>
+            <strong>Warnings</strong>: loopback addresses (localhost/127.0.0.1)
+            are only reachable from the server machine; use a LAN IP for local
+            network access or a public domain with TLS for external access.
+          </p>
+        </div>
+      </details>
     </form>
   </div>
 
+  <!-- * #region css/style -->
   <style>
-    /* Minimal layout helpers preserved from Webhook style */
+    /* Small layout helpers */
     .checkboxContainer {
       max-width: fit-content;
     }
@@ -298,32 +249,179 @@
       transform: rotate(90deg);
     }
 
-    /* Table inputs adopt Jellyfin input sizing */
-    #ee-folders-table input.emby-input {
-      width: 100%;
+    /* Card-based folder list */
+    .ee-folders-list {
+      display: grid;
+      grid-template-columns: 1fr; /* one card per row */
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    /* Individual folder card - Match Jellyfin card styling */
+    .ee-folder {
+      background: var(--cardBackground);
+      border-radius: 4px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: hidden;
+      position: relative;
+      transition: background-color 0.2s ease;
+    }
+
+    .ee-folder:hover {
+      background-color: var(--cardBackground);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Row layout inside card */
+    .ee-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .ee-row label {
+      color: var(--secondaryText);
+      font-size: 0.95em;
+      font-weight: 500;
+      min-width: 110px;
+      flex: 0 0 auto;
+      margin-top: 8px;
+    }
+
+    .ee-row input.ee-input,
+    .ee-row textarea.ee-input {
+      flex: 1 1 auto;
+      min-width: 200px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      color: var(--primaryText);
+      font-family: inherit;
+      font-size: 0.95em;
       box-sizing: border-box;
+      transition: all 0.2s ease;
     }
-    #ee-folders-table textarea.emby-input {
+
+    .ee-row input.ee-input:hover,
+    .ee-row textarea.ee-input:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .ee-row input.ee-input:focus,
+    .ee-row textarea.ee-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.15);
+    }
+
+    .ee-row textarea.ee-input {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .ee-row input[type="checkbox"].ee-checkbox {
+      margin-top: 8px;
+      cursor: pointer;
+      min-width: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Buttons inside rows */
+    .ee-row button.btn {
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+      color: var(--primaryText);
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      margin: 0;
+    }
+
+    .ee-row button.btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .ee-row button.btn:active {
+      background: rgba(255, 255, 255, 0.16);
+      transform: scale(0.98);
+    }
+
+    .ee-row button.btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Previews section */
+    .ee-resolved-path,
+    .ee-example-url {
+      font-size: 0.85em;
+      color: var(--secondaryText);
+      white-space: normal;
+      overflow-wrap: break-word;
+      line-height: 1.4em;
+      padding: 0;
+      margin: 0;
+    }
+
+    .ee-resolved-path {
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+
+    .ee-resolved-path:hover {
+      color: var(--primaryText);
+    }
+
+    .previews {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
       width: 100%;
-      box-sizing: border-box;
     }
 
-    /* Row spacing */
-    #ee-folders-table td {
-      vertical-align: middle;
-      padding: 0.35em 0.5em;
-    }
-
-    /* Center checkbox column */
-    #ee-folders-table td:nth-child(3) {
-      text-align: center;
-      vertical-align: middle;
-    }
-
-    /* Raw config pre */
+    /* Raw config section */
     #ee-raw {
-      max-height: 320px;
+      max-height: 400px;
       overflow: auto;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      line-height: 1.4;
+    }
+
+    /* Main buttons at bottom */
+    div[style*="margin-top: 1em"] {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    div[style*="margin-top: 1em"] button[is="emby-button"] {
+      min-width: 100px;
+    }
+
+    /* Narrow numeric inputs */
+    input[type="number"].emby-input,
+    input[type="number"].ee-input {
+      max-width: 150px;
     }
   </style>
+  <!-- * #endregion css/style -->
 </div>
+<!-- END - Configuration\settings.html -->

@@ -15,7 +15,7 @@ namespace Jellyfin.Plugin.EndpointExposer
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
-        /// Human friendly label shown in UI.
+        /// Friendly label shown in UI.
         /// </summary>
         public string? Label { get; set; }
 
@@ -30,3 +30,4 @@ namespace Jellyfin.Plugin.EndpointExposer
         public bool AllowNonAdmin { get; set; } = false;
     }
 }
+// END - src/Jellyfin.Plugin.EndpointExposer/FileEntry.cs

@@ -26,7 +26,7 @@ namespace Jellyfin.Plugin.EndpointExposer
         {
             try
             {
-                // Best-effort: some hosts expose IServiceCollection via ServiceProvider (rare).
+                // Some hosts expose IServiceCollection via ServiceProvider (rare).
                 // If available, register plugin services into host DI. Otherwise, continue — controllers
                 // and fallback service construction handle runtime behavior.
                 var services = ServiceProvider?.GetService(typeof(IServiceCollection)) as IServiceCollection;
@@ -35,11 +35,16 @@ namespace Jellyfin.Plugin.EndpointExposer
                     // Prefer persisted ServerBaseUrl if present, otherwise use a sensible default.
                     var serverBaseUrl = !string.IsNullOrWhiteSpace(this.Configuration?.ServerBaseUrl)
                         ? this.Configuration.ServerBaseUrl
-                        : "http://127.0.0.1:8096";
+                        : null;
 
-                    RegisterServices(services, serverBaseUrl);
-                    _logger?.LogInformation("EndpointExposer: registered services into host IServiceCollection at runtime.");
-                    return;
+                    if (!string.IsNullOrWhiteSpace(serverBaseUrl))
+                    {
+                        RegisterServices(services, serverBaseUrl);
+                        _logger?.LogInformation("EndpointExposer: registered services into host IServiceCollection at runtime.");
+                        return;
+                    }
+
+                    _logger?.LogInformation("EndpointExposer: IServiceCollection available but no ServerBaseUrl configured; skipping runtime service registration.");
                 }
 
                 // If IServiceCollection is not available, do not attempt fragile reflection hacks.
@@ -77,7 +82,7 @@ namespace Jellyfin.Plugin.EndpointExposer
 
         public override Guid Id => Guid.Parse("f1530767-390f-475e-afa2-6610c933c29e");
 
-        public string SomePath => Path.Combine(_appPaths.WebPath, "somefile.txt");
+        public string SomePath => Path.Combine(_appPaths.WebPath, "somefile.json");
 
         public string GetPluginDataDir()
         {
@@ -129,7 +134,7 @@ namespace Jellyfin.Plugin.EndpointExposer
             var pluginFolder = this.GetType().Namespace ?? "Jellyfin.Plugin.EndpointExposer";
             var dataDir = Path.Combine(cfgDir, pluginFolder, "data");
 
-            // Ensure directory exists (best-effort)
+            // Ensure directory exists
             try
             {
                 Directory.CreateDirectory(dataDir);
@@ -178,14 +183,14 @@ namespace Jellyfin.Plugin.EndpointExposer
         //
         // Example (in Startup or wherever you configure services):
         //
-        //   // serverBaseUrl should be the base URL of the Jellyfin/Emby server,
-        //   // e.g. "http://localhost:8096"
+        //   serverBaseUrl should be the base URL of the Jellyfin/Emby server,
+        //   e.g. "http://localhost:8096"
         //   Plugin.Instance?.RegisterServices(services, serverBaseUrl);
         //
         // Notes:
         // - This method registers PluginConfiguration (the plugin's persisted config),
         //   JellyfinAuth, FileWriteService (as a hosted service), and EndpointExposerService.
-        // - If your environment already registers equivalents, you can skip or adapt this.
+        // - If the environment already registers equivalents, we can skip or adapt this.
         // ---------------------------------------------------------------------
         public void RegisterServices(IServiceCollection services, string serverBaseUrl)
         {
@@ -218,7 +223,7 @@ namespace Jellyfin.Plugin.EndpointExposer
             });
 
             // Register FileWriteService as a singleton and also as a hosted service so its background listener (if any)
-            // will be started by the host. The FileWriteService in your project is a BackgroundService.
+            // will be started by the host. The FileWriteService in the project is a BackgroundService.
             services.AddSingleton<FileWriteService>(sp =>
             {
                 var cfg = sp.GetRequiredService<PluginConfiguration>();
@@ -230,14 +235,46 @@ namespace Jellyfin.Plugin.EndpointExposer
             // Add the background service wrapper so the host starts/stops it.
             services.AddHostedService(sp => sp.GetRequiredService<FileWriteService>());
 
-            // Register EndpointExposerService which contains the core logic used by the controller.
+            // Register AuthService for centralized token/auth logic
+            services.AddSingleton<AuthService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<AuthService>>();
+                var jellyfinAuth = sp.GetRequiredService<JellyfinAuth>();
+                var cfg = sp.GetRequiredService<PluginConfiguration>();
+                return new AuthService(logger, jellyfinAuth, cfg);
+            });
+
+            // Register FolderOperationService for folder-based file operations
+            services.AddSingleton<FolderOperationService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<FolderOperationService>>();
+                var cfg = sp.GetRequiredService<PluginConfiguration>();
+                var fileWriter = sp.GetRequiredService<FileWriteService>();
+                return new FolderOperationService(logger, cfg, fileWriter);
+            });
+
+            // Register ConfigurationHandler for configuration persistence
+            services.AddSingleton<ConfigurationHandler>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<ConfigurationHandler>>();
+                var folderOps = sp.GetRequiredService<FolderOperationService>();
+                return new ConfigurationHandler(logger, folderOps);
+            });
+
+            // Register FileOperationService for common file I/O utilities
+            services.AddSingleton<FileOperationService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<FileOperationService>>();
+                return new FileOperationService(logger);
+            });
+
+            // Register EndpointExposerService which contains the core file I/O logic used by the controller.
             services.AddSingleton<EndpointExposerService>(sp =>
             {
                 var logger = sp.GetRequiredService<ILogger<EndpointExposerService>>();
                 var cfg = sp.GetRequiredService<PluginConfiguration>();
                 var fileWriter = sp.GetRequiredService<FileWriteService>();
-                var auth = sp.GetRequiredService<JellyfinAuth>();
-                return new EndpointExposerService(logger, cfg, fileWriter, auth);
+                return new EndpointExposerService(logger, cfg, fileWriter);
             });
 
             // Register controller dependencies if your host requires explicit registration.
@@ -247,3 +284,4 @@ namespace Jellyfin.Plugin.EndpointExposer
         }
     }
 }
+// END - Plugin.cs

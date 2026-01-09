@@ -20,14 +20,14 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
 
         [HttpGet("{name}")]
         [AllowAnonymous]
-        public IActionResult GetPackage(string name, [FromQuery] string assemblyGuid = null)
+        public IActionResult GetPackage(string name, [FromQuery] string? assemblyGuid = null)
         {
             try
             {
-                static string NormalizeGuid(string g) =>
+                static string NormalizeGuid(string? g) =>
                     string.IsNullOrWhiteSpace(g) ? string.Empty : g.Replace("-", "").ToLowerInvariant();
 
-                // Canonical GUID from meta.json (keep this in sync)
+                // Canonical GUID from meta.json
                 var fallbackGuidRaw = "f1530767-390f-475e-afa2-6610c933c29e";
 
                 // Use the fallback GUID; attempt to read assembly GUID attribute if available but do not log on failure
@@ -88,3 +88,4 @@ namespace Jellyfin.Plugin.EndpointExposer.Controllers
 
     }
 }
+// END - PackagesController.cs

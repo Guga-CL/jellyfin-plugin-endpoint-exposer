@@ -57,7 +57,7 @@ namespace Jellyfin.Plugin.EndpointExposer
 
         /// <summary>
         /// Optional helper for non-HttpRequest contexts: provide headers and an optional Uri.
-        /// Useful if you still have legacy code that provides NameValueCollection or similar.
+        /// Useful if we will still have legacy code that provides NameValueCollection or similar.
         /// </summary>
         public static string? ExtractTokenFromHeaders(IDictionary<string, string?> headers, Uri? url = null)
         {
@@ -90,3 +90,4 @@ namespace Jellyfin.Plugin.EndpointExposer
         }
     }
 }
+// END - TokenHelper.cs

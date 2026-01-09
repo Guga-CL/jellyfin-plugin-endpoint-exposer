@@ -15,7 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Use the Jellyfin package IDs that restore from nuget.org in your environment -->
+    <!-- Use the Jellyfin package IDs that restore from nuget.org -->
     <PackageReference Include="Jellyfin.Common" Version="10.11.3" />
     <PackageReference Include="Jellyfin.Controller" Version="10.11.3" />
     <PackageReference Include="Jellyfin.Model" Version="10.11.3" />
@@ -35,10 +35,4 @@
       <LogicalName>$(RootNamespace).Configuration.settings.js</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
-
-  <!-- <ItemGroup>
-    <None Update="meta.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup> -->
 </Project>
