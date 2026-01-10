@@ -35,3 +35,8 @@ My.Custom.Section.Plugin.bak/
 *.sln
 deploy.ps1
 build.ps1
+scripts/data/apik.txt
+refactoring info
+logs/jellyfin_initial_log.txt
+.gitignore
+logs/ProjectDiagnostics.txt

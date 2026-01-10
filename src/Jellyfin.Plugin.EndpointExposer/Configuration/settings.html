@@ -1,0 +1,427 @@
+<!-- Configuration\settings.html -->
+<div
+  data-role="page"
+  id="endpointExposerConfigurationPage"
+  class="page type-interior pluginConfigurationPage fullWidthContent"
+  data-controller="__plugin/EndpointExposer.js"
+>
+  <div class="content-primary">
+    <div class="verticalSection">
+      <div class="sectionTitleContainer">
+        <h2 class="sectionTitle">Endpoint Exposer</h2>
+      </div>
+    </div>
+
+    <form class="endpointExposerConfigurationForm" id="ee-config-form">
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="text"
+          id="ServerBaseUrl"
+          label="Server Base URL"
+          placeholder="http://yourhost:8096"
+        />
+        <span>Base URL used by the plugin for callbacks and links.</span>
+      </div>
+
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="text"
+          id="ApiKey"
+          label="API Key"
+          placeholder="Optional API key for header-based writes"
+        />
+        <span>Optional API key used for header-based writes.</span>
+      </div>
+
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="text"
+          id="OutputDirectory"
+          label="Output Directory"
+          placeholder="Leave blank for default app data path"
+        />
+        <span
+          >Directory where files will be written. Leave blank for default.</span
+        >
+      </div>
+
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="number"
+          id="MaxPayloadBytes"
+          label="Max Payload Bytes"
+          min="1024"
+          step="1024"
+        />
+        <span>Maximum allowed payload size in bytes.</span>
+      </div>
+
+      <div class="inputContainer">
+        <input
+          is="emby-input"
+          type="number"
+          id="MaxBackups"
+          label="Max Backups"
+          min="0"
+        />
+        <span>Number of backups to keep for written files.</span>
+      </div>
+
+      <!-- Exposed Folders (styled) -->
+      <div
+        id="ee-exposed-folders-section"
+        class="verticalSection"
+        style="
+          padding: 0.5em 0.75em;
+          margin-bottom: 1em;
+          border-radius: 8px;
+          background: transparent;
+        "
+      >
+        <h3 class="sectionTitle">Exposed Folders</h3>
+        <p class="muted">
+          Create logical folders that the plugin exposes for read/write. Folder
+          tokens must match <code>^[a-z0-9_-]+$</code>.
+        </p>
+
+        <!-- Replace the table with a simple list container -->
+        <div
+          id="ee-folders-list"
+          class="ee-folders-list"
+          style="margin-top: 0.5em"
+        ></div>
+
+        <!-- Controls: single instance only -->
+        <div
+          class="ee-controls"
+          style="margin-top: 0.75em; display: flex; gap: 0.5em"
+        >
+          <button
+            id="ee-add-folder"
+            is="emby-button"
+            type="button"
+            class="raised emby-button"
+          >
+            <span>Add Folder</span>
+          </button>
+        </div>
+      </div>
+
+      <details
+        class="verticalSection"
+        id="ee-raw-details"
+        style="
+          background-color: rgba(255, 255, 255, 0.02);
+          border-radius: 8px;
+          margin-bottom: 1em;
+        "
+      >
+        <summary
+          style="
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            padding: 0.75em 1em;
+          "
+        >
+          <i
+            class="material-icons arrow-icon"
+            aria-hidden="true"
+            style="
+              transition: transform 0.18s ease-in-out;
+              transform: rotate(0deg);
+            "
+            >arrow_right</i
+          >
+          <h3 class="sectionTitle" style="margin: 0 0 0 0.5em">
+            Raw configuration (read-only)
+          </h3>
+        </summary>
+
+        <div
+          style="padding: 1em; border-top: 1px solid rgba(255, 255, 255, 0.04)"
+        >
+          <pre
+            id="ee-raw"
+            style="
+              white-space: pre-wrap;
+              background: var(--cardBackground);
+              padding: 8px;
+              border-radius: 4px;
+              font-family: monospace;
+              color: var(--primaryText);
+            "
+          ></pre>
+        </div>
+      </details>
+
+      <div style="margin-top: 1em">
+        <button
+          is="emby-button"
+          id="ee-load"
+          type="button"
+          class="raised emby-button"
+        >
+          <span>Load</span>
+        </button>
+
+        <button
+          is="emby-button"
+          id="ee-save"
+          type="submit"
+          class="raised button-submit emby-button"
+        >
+          <span>Save</span>
+        </button>
+
+        <button
+          is="emby-button"
+          id="ee-fetch"
+          type="button"
+          class="raised emby-button"
+        >
+          <span>Fetch current config (raw)</span>
+        </button>
+
+        <span id="ee-status" style="margin-left: 12px"></span>
+      </div>
+
+      <details class="verticalSection" style="margin-top: 1em">
+        <summary style="cursor: pointer; display: flex; align-items: center">
+          <h3 class="sectionTitle" style="margin: 0 0 0 0.5em">
+            Help & Troubleshooting
+          </h3>
+        </summary>
+        <div
+          style="padding: 1em; border-top: 1px solid rgba(255, 255, 255, 0.04)"
+        >
+          <p>
+            <strong>Server Base URL</strong>: set the canonical public URL
+            (include virtual path) if you use a reverse proxy or need external
+            callbacks. Leave blank to let the server derive the base from
+            incoming requests.
+          </p>
+          <p>
+            <strong>Detected base</strong>: the UI shows the base your browser
+            sees. Click <em>Use detected</em> to copy it into Server Base URL.
+          </p>
+          <p>
+            <strong>Resolved path preview</strong>: the plugin asks the server
+            for the real filesystem path. If the preview fails on first create,
+            try the <em>Test</em> button or reload — the server may need a
+            moment to initialize.
+          </p>
+          <p>
+            <strong>Warnings</strong>: loopback addresses (localhost/127.0.0.1)
+            are only reachable from the server machine; use a LAN IP for local
+            network access or a public domain with TLS for external access.
+          </p>
+        </div>
+      </details>
+    </form>
+  </div>
+
+  <!-- * #region css/style -->
+  <style>
+    /* Small layout helpers */
+    .checkboxContainer {
+      max-width: fit-content;
+    }
+    .inputContainer {
+      margin-bottom: 0.75em;
+    }
+    .inputLabel {
+      display: block;
+      margin-top: 0.25em;
+      color: var(--secondaryText);
+    }
+    .inputLabelUnfocused {
+      opacity: 0.8;
+    }
+
+    /* Rotate arrow when details is open */
+    details[open] .arrow-icon {
+      transform: rotate(90deg);
+    }
+
+    /* Card-based folder list */
+    .ee-folders-list {
+      display: grid;
+      grid-template-columns: 1fr; /* one card per row */
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    /* Individual folder card - Match Jellyfin card styling */
+    .ee-folder {
+      background: var(--cardBackground);
+      border-radius: 4px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: hidden;
+      position: relative;
+      transition: background-color 0.2s ease;
+    }
+
+    .ee-folder:hover {
+      background-color: var(--cardBackground);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Row layout inside card */
+    .ee-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .ee-row label {
+      color: var(--secondaryText);
+      font-size: 0.95em;
+      font-weight: 500;
+      min-width: 110px;
+      flex: 0 0 auto;
+      margin-top: 8px;
+    }
+
+    .ee-row input.ee-input,
+    .ee-row textarea.ee-input {
+      flex: 1 1 auto;
+      min-width: 200px;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      color: var(--primaryText);
+      font-family: inherit;
+      font-size: 0.95em;
+      box-sizing: border-box;
+      transition: all 0.2s ease;
+    }
+
+    .ee-row input.ee-input:hover,
+    .ee-row textarea.ee-input:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .ee-row input.ee-input:focus,
+    .ee-row textarea.ee-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.15);
+    }
+
+    .ee-row textarea.ee-input {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .ee-row input[type="checkbox"].ee-checkbox {
+      margin-top: 8px;
+      cursor: pointer;
+      min-width: 18px;
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Buttons inside rows */
+    .ee-row button.btn {
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+      color: var(--primaryText);
+      cursor: pointer;
+      font-size: 0.9em;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      margin: 0;
+    }
+
+    .ee-row button.btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .ee-row button.btn:active {
+      background: rgba(255, 255, 255, 0.16);
+      transform: scale(0.98);
+    }
+
+    .ee-row button.btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Previews section */
+    .ee-resolved-path,
+    .ee-example-url {
+      font-size: 0.85em;
+      color: var(--secondaryText);
+      white-space: normal;
+      overflow-wrap: break-word;
+      line-height: 1.4em;
+      padding: 0;
+      margin: 0;
+    }
+
+    .ee-resolved-path {
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+
+    .ee-resolved-path:hover {
+      color: var(--primaryText);
+    }
+
+    .previews {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+      width: 100%;
+    }
+
+    /* Raw config section */
+    #ee-raw {
+      max-height: 400px;
+      overflow: auto;
+      background: rgba(255, 255, 255, 0.02);
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 0.85em;
+      line-height: 1.4;
+    }
+
+    /* Main buttons at bottom */
+    div[style*="margin-top: 1em"] {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    div[style*="margin-top: 1em"] button[is="emby-button"] {
+      min-width: 100px;
+    }
+
+    /* Narrow numeric inputs */
+    input[type="number"].emby-input,
+    input[type="number"].ee-input {
+      max-width: 150px;
+    }
+  </style>
+  <!-- * #endregion css/style -->
+</div>
+<!-- END - Configuration\settings.html -->
