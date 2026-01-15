@@ -617,9 +617,11 @@ function getAccessToken() {
         if (!list) return out;
         const cards = Array.from(list.querySelectorAll('.ee-folder'));
         for (const c of cards) {
-            const nameInput = c.querySelector('input[type="text"].ee-input');
-            const relInput = c.querySelector('input[type="text"].ee-input:nth-of-type(2)') || c.querySelector('input[type="text"].ee-input');
-            const descInput = c.querySelector('textarea.ee-input') || c.querySelector('input[type="text"].ee-input[placeholder="Optional description"]');
+            // Get all text inputs in order: [0] = Name, [1] = RelativePath
+            const textInputs = c.querySelectorAll('input[type="text"].ee-input');
+            const nameInput = textInputs[0];
+            const relInput = textInputs[1];
+            const descInput = c.querySelector('textarea.ee-input');
             const allowInput = c.querySelector('input[type="checkbox"], input.ee-checkbox');
             out.push({
                 Name: nameInput ? nameInput.value.trim() : '',
