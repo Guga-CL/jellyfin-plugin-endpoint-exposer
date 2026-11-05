@@ -364,28 +364,19 @@ namespace Jellyfin.Plugin.EndpointExposer.Services
             var apiKeyConfigured = !string.IsNullOrWhiteSpace(config?.ApiKey);
             var providedApiKey = ExtractApiKeyFromRequest(request);
             var apiKeyValid = !string.IsNullOrWhiteSpace(providedApiKey) && string.Equals(providedApiKey, config?.ApiKey, StringComparison.Ordinal);
+            var nonAdminAllowed = globalAllowNonAdmin || folderAllowsNonAdmin;
 
             _logger.LogDebug("CheckFolderWriteAuthorization: folder={Folder}, isAdmin={IsAdmin}, folderAllowsNonAdmin={FolderAllows}, globalAllowNonAdmin={GlobalAllows}, apiKeyConfigured={ApiKeySet}, apiKeyValid={ApiKeyValid}, folderEntryFound={FolderFound}",
                 folderName, isAdmin, folderAllowsNonAdmin, globalAllowNonAdmin, apiKeyConfigured, apiKeyValid, folderEntry != null);
 
-            // If API key is valid, allow (implicit - we don't return Unauthorized)
-            // If API key is NOT valid (or not provided), check folder settings
-            if (!apiKeyValid)
+            // A valid plugin API key or an explicit global/folder permission authorizes writes.
+            if (!apiKeyValid && !nonAdminAllowed)
             {
-                // API key doesn't match or wasn't provided
-                // Deny if: !allowNonAdminGlobal || !apiKeySet || !folderAllows
-                // Allow if: allowNonAdminGlobal && apiKeySet && folderAllows
-                if (!globalAllowNonAdmin || !apiKeyConfigured || !folderAllowsNonAdmin)
-                {
-                    var reason = $"Unauthorized: requires admin, valid API key, or folder allows non-admin with proper settings (globalAllow={globalAllowNonAdmin}, apiKeySet={apiKeyConfigured}, folderAllows={folderAllowsNonAdmin})";
-                    _logger.LogWarning("CheckFolderWriteAuthorization: {Reason}", reason);
-                    return (false, reason);
-                }
+                var reason = $"Unauthorized: requires admin, valid API key, or non-admin access enabled (globalAllow={globalAllowNonAdmin}, folderAllows={folderAllowsNonAdmin})";
+                _logger.LogWarning("CheckFolderWriteAuthorization: {Reason}", reason);
+                return (false, reason);
             }
 
-            // If we get here, either:
-            // 1. API key is valid, OR
-            // 2. API key is not valid but (allowNonAdminGlobal && apiKeySet && folderAllows) is true
             _logger.LogDebug("CheckFolderWriteAuthorization: authorized for folder={Folder}", folderName);
             return (true, null);
         }

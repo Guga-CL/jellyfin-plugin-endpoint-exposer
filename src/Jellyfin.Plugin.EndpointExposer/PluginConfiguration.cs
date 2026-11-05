@@ -19,7 +19,8 @@ namespace Jellyfin.Plugin.EndpointExposer
         public string? OutputDirectory { get; set; }
 
         /// <summary>
-        /// If true, non-admin users are allowed to write files (global fallback).
+        /// If true, non-admin users are allowed to write to all exposed folders.
+        /// Individual folders can also allow non-admin writes independently.
         /// </summary>
         public bool AllowNonAdmin { get; set; } = false;
 
@@ -81,7 +82,7 @@ namespace Jellyfin.Plugin.EndpointExposer
         public string RelativePath { get; set; } = string.Empty;
 
         /// <summary>
-        /// If true, non-admin users are allowed to write files in this folder (subject to global AllowNonAdmin).
+        /// If true, non-admin users are allowed to write files in this folder.
         /// </summary>
         public bool AllowNonAdmin { get; set; } = false;
 
