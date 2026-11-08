@@ -2,9 +2,9 @@
 
 ## Status
 
-**Work in progress:** The plugin already works in Jellyfin 12.4 (Windows 11), in the sense that other plugins/mods can use Endpoint Exposer to write to one or more folders.
+**Work in progress:** The plugin already works in Jellyfin 12.4 (Windows 11), in the sense that other mods/plugins can use Endpoint Exposer to write to one or more folders.
 
-This was built for personal use, I was not super familiar with C# and jellyfin plugin structure, so there was a lot of trial and error and I didn't had the time/will to properly clean/ refactor the project to remove all the useless, legacy, and (or) test stuff.
+It was built for personal use, I was not super familiar with C# and jellyfin plugin structure, so there was a lot of trial and error and I didn't had the time/will to properly clean/ refactor the project to remove all the useless, legacy, and (or) test stuff.
 
 **Warning:** This was only tested in Windows 11, and I'm not sure if it's secure enough, so use this at your own risk.
 
@@ -12,12 +12,12 @@ This was built for personal use, I was not super familiar with C# and jellyfin p
 
 ## Overview
 
-**Objective:** Tries to provide a secure, simple HTTP interface that lets Jellyfin plugins, web mods, etc. read and write files inside a controlled plugin data directory without requiring direct filesystem access.
+**Objective:** Tries to provide a secure, simple HTTP interface that lets Jellyfin web mods, etc. read and write files inside a controlled plugin data directory without requiring direct filesystem access.
 This replaces the need for external tooling (Caddy + reverse proxy + PS1/Node scripts) to write files to the server.
 
 I like to create stupid/very specific mods, and some of them need to write direct to the server to allow global changes, example custom sections that may update content with actions made directly in the browser/section, so this is basically a little helper for those scenarios.
 
-Maybe there are better/other solutions now, so do you research before you choose to try this.
+Maybe there are better/other solutions now, so do you research before you choose to use this.
 
 ---
 
