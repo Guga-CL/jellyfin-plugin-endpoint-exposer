@@ -2,7 +2,7 @@
 
 ## Status
 
-**Work in progress:** The plugin already works in Jellyfin 10.11.x (Windows 11), in the sense that other plugins/mods can use Endpoint Exposer to write to one or more folders.
+**Work in progress:** The plugin already works in Jellyfin 12.4 (Windows 11), in the sense that other plugins/mods can use Endpoint Exposer to write to one or more folders.
 
 This was built for personal use, I was not super familiar with C# and jellyfin plugin structure, so there was a lot of trial and error and I didn't had the time/will to properly clean/ refactor the project to remove all the useless, legacy, and (or) test stuff.
 
