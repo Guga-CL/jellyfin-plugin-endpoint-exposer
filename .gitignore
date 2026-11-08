@@ -24,6 +24,9 @@ Thumbs.db
 *.ps1
 *.psm1
 
+# md
+notes.md
+
 #Others
 .idea/
 artifacts
