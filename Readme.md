@@ -12,12 +12,12 @@ It was built for personal use, I was not super familiar with C# and jellyfin plu
 
 ## Overview
 
-**Objective:** Tries to provide a secure, simple HTTP interface that lets Jellyfin web mods, etc. read and write files inside a controlled plugin data directory without requiring direct filesystem access.
-This replaces the need for external tooling (Caddy + reverse proxy + PS1/Node scripts) to write files to the server.
+**Objective:** Tries to provide a secure, simple HTTP interface that lets Jellyfin web mods, etc. read and write files inside a controlled plugin data directory without requiring direct filesystem access and (or) having to create your own plugin.
+This replaces the need for external tooling (Caddy + reverse proxy + PS1/Node... scripts) to write files to the server.
 
-I like to create stupid/very specific mods, and some of them need to write direct to the server to allow global changes, example custom sections that may update content with actions made directly in the browser/section, so this is basically a little helper for those scenarios.
+Sometimes I like to create very specific mods, and some of them need to write direct to the server to allow global changes, example custom sections that may update content with actions made directly in the browser/section. I could create a plugin instead and not have to use this at all, but for a quick job a mod is easier/faster to deal with, debug, etc. so this is basically a little helper for those scenarios.
 
-Maybe there are better/other solutions now, so do you research before you choose to use this.
+Maybe there are other, better, solutions now, so do you research before you decide to use this.
 
 ---
 
@@ -33,7 +33,7 @@ Relative Path: MY_FOLDER
 ```
 
 Click Create Folder then check the default user data plugin configuration folder.
-The path should appear at the bottom part of the folder card but if it doesn't work you can manually create it with the same folder name:
+The path should appear at the bottom part of the folder card, but if it doesn't work you can manually create it with the same folder name:
 
 ```
 C:\Users\<user_name_here>\AppData\Local\jellyfin\plugins\configurations\Jellyfin.Plugin.EndpointExposer\data\MY_FOLDER
